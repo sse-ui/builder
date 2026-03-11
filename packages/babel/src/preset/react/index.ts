@@ -1,0 +1,61 @@
+import { declare } from "@babel/helper-plugin-utils";
+import transformReactJSX from "@babel/plugin-transform-react-jsx";
+import createReactJSXPlugin from "@babel/plugin-transform-react-jsx/lib/create-plugin";
+import transformReactDisplayName from "@babel/plugin-transform-react-display-name";
+import transformReactPure from "@babel/plugin-transform-react-pure-annotations";
+import normalizeOptions from "./normalize-options";
+import type { PluginItem } from "@babel/core";
+
+export interface Options {
+  development?: boolean;
+  developmentSourceSelf?: boolean;
+  importSource?: string;
+  pragma?: string;
+  pragmaFrag?: string;
+  pure?: string;
+  runtime?: "automatic" | "classic";
+  throwIfNamespace?: boolean;
+  useBuiltIns?: boolean;
+  useSpread?: boolean;
+}
+
+export default declare<Options>((api, opts) => {
+  api.assertVersion("7");
+
+  const {
+    development = api.env((env) => env === "development"),
+    developmentSourceSelf,
+    importSource,
+    pragma,
+    pragmaFrag,
+    pure,
+    runtime,
+    throwIfNamespace,
+  } = normalizeOptions(opts);
+
+  return {
+    visitor: {},
+    plugins: [
+      [
+        development
+          ? createReactJSXPlugin({
+              name: "transform-react-jsx/development",
+              development: true,
+              developmentSourceSelf,
+            })
+          : transformReactJSX,
+
+        {
+          importSource,
+          pragma,
+          pragmaFrag,
+          runtime,
+          throwIfNamespace,
+          pure,
+        },
+      ] satisfies PluginItem,
+      transformReactDisplayName,
+      pure !== false && transformReactPure,
+    ].filter(Boolean) as PluginItem[],
+  };
+});

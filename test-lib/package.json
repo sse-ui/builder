@@ -1,0 +1,16 @@
+{
+  "name": "@my-org/test-lib",
+  "version": "1.0.0",
+  "publishConfig": {
+    "directory": "build"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.20.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  },
+  "scripts": {
+    "build": "node ../bin/sse-tools.js build --bundle esm cjs --buildTypes"
+  }
+}
