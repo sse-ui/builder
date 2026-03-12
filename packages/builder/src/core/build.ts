@@ -17,8 +17,7 @@ import {
   type BundleType,
 } from "../utils/build";
 import { PackageJson } from "./packageJson";
-
-const validBundles: BundleType[] = ["cjs", "esm"];
+import { loadConfig } from "../utils/loadConfig";
 
 export interface BuildOptions {
   /** The bundles to build. */
@@ -216,16 +215,42 @@ export const buildCommand = new Command("build")
   .option("--enableReactCompiler", "Whether to use the React compiler.", false)
   .option(
     "--tsgo",
-    'Uses tsgo cli instead of tsc for type generation. Can also be set via env var "MUI_USE_TSGO"',
-    process.env.MUI_USE_TSGO === "1" || process.env.MUI_USE_TSGO === "true",
+    'Uses tsgo cli instead of tsc for type generation. Can also be set via env var "SSE_USE_TSGO"',
+    process.env.SSE_USE_TSGO === "1" || process.env.SSE_USE_TSGO === "true",
   )
   .option(
     "--flat",
     "Builds the package in a flat structure without subdirectories for each module type.",
-    process.env.MUI_BUILD_FLAT === "1",
+    process.env.SSE_BUILD_FLAT === "1",
   )
   .option("--verbose", "Enable verbose logging.", false)
-  .action(async (options: BuildOptions) => {
+  .action(async (cliOptions: BuildOptions) => {
+    const fileConfig = await loadConfig();
+
+    const options: BuildOptions = {
+      bundle: cliOptions.bundle || fileConfig.bundle || ["esm", "cjs"],
+      hasLargeFiles:
+        cliOptions.hasLargeFiles ?? fileConfig.hasLargeFiles ?? false,
+      skipBundlePackageJson:
+        cliOptions.skipBundlePackageJson ??
+        fileConfig.skipBundlePackageJson ??
+        false,
+      buildTypes: cliOptions.buildTypes ?? fileConfig.buildTypes ?? true,
+      skipTsc: cliOptions.skipTsc ?? fileConfig.skipTsc ?? false,
+      ignore: [...(fileConfig.ignore || []), ...(cliOptions.ignore || [])],
+      copy: [...(fileConfig.copy || []), ...(cliOptions.copy || [])],
+      enableReactCompiler:
+        cliOptions.enableReactCompiler ??
+        fileConfig.enableReactCompiler ??
+        false,
+      tsgo: cliOptions.tsgo ?? fileConfig.tsgo ?? false,
+      flat: cliOptions.flat ?? fileConfig.flat ?? false,
+      verbose: cliOptions.verbose ?? fileConfig.verbose ?? false,
+      skipBabelRuntimeCheck: false,
+      skipPackageJson: false,
+      skipMainCheck: false,
+    };
+
     const {
       bundle: bundles,
       hasLargeFiles,
@@ -303,7 +328,7 @@ export const buildCommand = new Command("build")
       "latest";
 
     if (enableReactCompiler) {
-      const mode = process.env.MUI_REACT_COMPILER_MODE ?? "opt-in";
+      const mode = process.env.SSE_REACT_COMPILER_MODE ?? "opt-in";
       console.log(
         `[feature] Building with React compiler enabled. The compiler mode is "${mode}" right now.${mode === "opt-in" ? ' Use explicit "use memo" directives in your components to enable the React compiler for them.' : ""}`,
       );
@@ -457,7 +482,7 @@ async function copyHandler({
   // ];
 
   const workspaceRoot = await findWorkspacesRoot(cwd);
-  
+
   // Set up the local files to check first
   const localOrRootFiles = [
     [path.join(cwd, "README.md")],

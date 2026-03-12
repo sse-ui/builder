@@ -1,16 +1,28 @@
 {
   "name": "@sse-ui/builder",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "Builder By SSE",
   "type": "module",
   "scripts": {
-    "build": "tsup"
+    "build": "tsup",
+    "prepublish": "npm run build"
   },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist"
+  ],
   "bin": {
-    "sse-tools": "./bin/sse-tools.js"
+    "sse-tools": "./dist/cli.js"
   },
   "exports": {
-    "./babel-config": "./dist/babel-config.js"
+    "./babel-config": {
+      "import": "./dist/babel-config.js",
+      "types": "./dist/babel-config.d.ts"
+    },
+    "./config": {
+      "import": "./dist/config.js",
+      "types": "./dist/config.d.ts"
+    }
   },
   "author": "SSE World",
   "license": "MIT",
@@ -33,6 +45,7 @@
     "babel-plugin-transform-import-meta": "^2.3.3",
     "babel-plugin-transform-inline-environment-variables": "^0.4.4",
     "babel-plugin-transform-react-remove-prop-types": "^0.4.24",
+    "c12": "^4.0.0-beta.3",
     "commander": "^14.0.3",
     "execa": "^9.6.1",
     "find-workspaces": "^0.3.1",

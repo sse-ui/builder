@@ -7,17 +7,17 @@
     "directory": "build"
   },
   "dependencies": {
-    "@babel/runtime": "^7.20.0",
-    "@sse-ui/builder": "1.0.0"
+    "@babel/runtime": "^7.20.0"
   },
   "peerDependencies": {
     "react": "^18.0.0"
   },
   "scripts": {
-    "build": "node ../packages/builder/bin/sse-tools.js build --bundle esm cjs --buildTypes",
-    "pub": "node ../packages/builder/bin/sse-tools.js"
+    "build": "sse-tools build",
+    "pub": "sse-tools publish"
   },
   "devDependencies": {
-    "@babel/plugin-transform-react-constant-elements": "^7.27.1"
+    "@babel/plugin-transform-react-constant-elements": "^7.27.1",
+    "@sse-ui/builder": "^1.0.3"
   }
 }

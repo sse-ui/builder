@@ -17,7 +17,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc"
+    "build": "tsc -p tsconfig.build.json"
   },
   "author": "SSE Official",
   "license": "MIT",
