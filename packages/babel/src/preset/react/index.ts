@@ -1,8 +1,8 @@
 import { declare } from "@babel/helper-plugin-utils";
 import transformReactJSX from "@babel/plugin-transform-react-jsx";
 import createReactJSXPlugin from "@babel/plugin-transform-react-jsx/lib/create-plugin";
-import transformReactDisplayName from "@babel/plugin-transform-react-display-name";
-import transformReactPure from "@babel/plugin-transform-react-pure-annotations";
+import transformReactDisplayName from "../../plugin/transform-react-display-name";
+import transformReactPure from "../../plugin/transform-react-pure-annotations";
 import normalizeOptions from "./normalize-options";
 import type { PluginItem } from "@babel/core";
 

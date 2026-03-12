@@ -1,5 +1,5 @@
 import nodePath from "node:path";
-import resolve from "resolve/sync";
+import resolve from "resolve/sync.js";
 import babel, { PluginObj } from "@babel/core";
 
 type Options = {

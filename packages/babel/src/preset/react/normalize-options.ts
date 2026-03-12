@@ -1,4 +1,4 @@
-import { OptionValidator, findSuggestion } from "../../helper-validator-option";
+import { OptionValidator, findSuggestion } from "../../helper/validator-option";
 const v = new OptionValidator("@babel/preset-react");
 
 export default function normalizeOptions(options: any = {}) {
