@@ -1,6 +1,8 @@
 {
   "name": "build",
   "private": true,
+  "license": "MIT",
+  "author": "SSE Universe",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -9,6 +11,7 @@
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
+    "@mui/internal-babel-plugin-minify-errors": "^2.0.6",
     "prettier": "^3.7.4",
     "turbo": "^2.8.15",
     "typescript": "5.9.2"
@@ -19,6 +22,7 @@
   "packageManager": "npm@10.9.3",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "test-lib"
   ]
 }

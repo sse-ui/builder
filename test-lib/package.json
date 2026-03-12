@@ -1,16 +1,23 @@
 {
   "name": "@my-org/test-lib",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "license": "MIT",
+  "author": "SSE Official",
   "publishConfig": {
     "directory": "build"
   },
   "dependencies": {
-    "@babel/runtime": "^7.20.0"
+    "@babel/runtime": "^7.20.0",
+    "@sse-ui/builder": "1.0.0"
   },
   "peerDependencies": {
     "react": "^18.0.0"
   },
   "scripts": {
-    "build": "node ../bin/sse-tools.js build --bundle esm cjs --buildTypes"
+    "build": "node ../packages/builder/bin/sse-tools.js build --bundle esm cjs --buildTypes",
+    "pub": "node ../packages/builder/bin/sse-tools.js"
+  },
+  "devDependencies": {
+    "@babel/plugin-transform-react-constant-elements": "^7.27.1"
   }
 }
