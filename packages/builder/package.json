@@ -1,10 +1,16 @@
 {
   "name": "@sse-ui/builder",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Builder By SSE",
+  "type": "module",
   "scripts": {
     "build": "tsup"
+  },
+  "bin": {
+    "sse-tools": "./bin/sse-tools.js"
+  },
+  "exports": {
+    "./babel-config": "./dist/babel-config.js"
   },
   "author": "SSE World",
   "license": "MIT",
@@ -17,6 +23,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@babel/cli": "^7.28.6",
     "@babel/core": "^7.29.0",
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",

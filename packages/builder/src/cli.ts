@@ -1,6 +1,15 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { buildCommand } from "./core/build";
+import { publishCommand } from "./core/publish";
+import { cleanCommand } from "./core/clean";
+import { typecheckCommand } from "./core/typecheck";
+import { packCommand } from "./core/pack";
+import { versionCommand } from "./core/version";
+import { infoCommand } from "./core/info";
+import { linkCommand } from "./core/link";
+import { checkExportsCommand } from "./core/check-exports";
+import { watchCommand } from "./core/watch";
 
 async function main() {
   const program = new Command();
@@ -11,6 +20,15 @@ async function main() {
     .version("1.0.0");
 
   program.addCommand(buildCommand);
+  program.addCommand(publishCommand);
+  program.addCommand(cleanCommand);
+  program.addCommand(typecheckCommand);
+  program.addCommand(packCommand);
+  program.addCommand(versionCommand);
+  program.addCommand(infoCommand);
+  program.addCommand(linkCommand);
+  program.addCommand(checkExportsCommand);
+  program.addCommand(watchCommand);
 
   try {
     await program.parseAsync(process.argv);
