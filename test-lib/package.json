@@ -13,6 +13,7 @@
     "react": "^18.0.0"
   },
   "scripts": {
+    "dev": "node ../packages/builder/dist/cli.js",
     "build": "sse-tools build",
     "pub": "sse-tools publish"
   },
