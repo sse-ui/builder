@@ -1,6 +1,6 @@
 {
   "name": "@sse-ui/builder",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "Builder By SSE",
   "type": "module",
   "scripts": {
@@ -47,9 +47,11 @@
     "babel-plugin-transform-react-remove-prop-types": "^0.4.24",
     "c12": "^4.0.0-beta.3",
     "commander": "^14.0.3",
+    "esbuild": "^0.27.4",
     "execa": "^9.6.1",
     "find-workspaces": "^0.3.1",
     "globby": "^16.1.1",
+    "jiti": "^2.6.1",
     "minimatch": "^10.2.4",
     "mismatch": "^1.2.0",
     "semver": "^7.7.4"

@@ -6,14 +6,14 @@ import * as path from "node:path";
 import { sep as posixSep } from "node:path/posix";
 import * as semver from "semver";
 import { Command } from "commander";
+import { build as esbuild } from "esbuild";
 
 import {
-  createPackageBin,
-  createPackageExports,
+  addLicense,
   getOutExtension,
   mapConcurrently,
-  PackageType,
   validatePkgJson,
+  writePackageJson,
   type BundleType,
 } from "../utils/build";
 import { PackageJson } from "./packageJson";
@@ -48,127 +48,13 @@ export interface BuildOptions {
   tsgo: boolean;
   /** Builds the package in a flat structure without subdirectories for each module type. */
   flat: boolean;
-}
-
-interface AddLicenseOptions {
-  name?: string;
-  version?: string;
-  license?: string;
-  isFlat: boolean;
-  packageType?: "module" | "commonjs";
-  bundle: BundleType;
-  outputDir: string;
-}
-
-async function addLicense({
-  name,
-  version,
-  license,
-  bundle,
-  outputDir,
-  isFlat,
-  packageType,
-}: AddLicenseOptions) {
-  const outExtension = getOutExtension(bundle, { isFlat, packageType });
-  const file = path.join(outputDir, `index${outExtension}`);
-
-  if (
-    !(await fs.stat(file).then(
-      (stats) => stats.isFile(),
-      () => false,
-    ))
-  ) {
-    return;
-  }
-
-  const content = await fs.readFile(file, { encoding: "utf8" });
-  await fs.writeFile(
-    file,
-    `/**
- * ${name} v${version}
- *
- * @license ${license}
- * This source code is licensed under the ${license} license found in the
- * LICENSE file in the root directory of this source tree.
- */
-${content}`,
-    { encoding: "utf8" },
-  );
-  console.log(`License added to ${file}`);
-}
-
-interface WritePackageJsonOptions {
-  packageJson: PackageJson;
-  bundles: { type: BundleType; dir: string }[];
-  outputDir: string;
-  cwd: string;
-  addTypes?: boolean;
-  isFlat?: boolean;
-  packageType?: PackageType;
-}
-
-async function writePackageJson({
-  packageJson,
-  bundles,
-  outputDir,
-  cwd,
-  addTypes = false,
-  isFlat = false,
-  packageType,
-}: WritePackageJsonOptions) {
-  delete packageJson.scripts;
-  delete packageJson.publishConfig?.directory;
-  delete packageJson.devDependencies;
-  delete packageJson.imports;
-
-  const resolvedPackageType = packageType || packageJson.type || "commonjs";
-  packageJson.type = resolvedPackageType;
-
-  const originalExports = packageJson.exports;
-  delete packageJson.exports;
-  const originalBin = packageJson.bin;
-  delete packageJson.bin;
-
-  const {
-    exports: packageExports,
-    main,
-    types,
-  } = await createPackageExports({
-    exports: originalExports,
-    bundles,
-    outputDir,
-    cwd,
-    addTypes,
-    isFlat,
-    packageType: resolvedPackageType,
-  });
-
-  packageJson.exports = packageExports;
-  if (main) {
-    packageJson.main = main;
-  }
-
-  if (types) {
-    packageJson.types = types;
-  }
-
-  const bin = await createPackageBin({
-    bin: originalBin,
-    bundles,
-    cwd,
-    isFlat,
-    packageType: resolvedPackageType,
-  });
-
-  if (bin) {
-    packageJson.bin = bin;
-  }
-
-  await fs.writeFile(
-    path.join(outputDir, "package.json"),
-    JSON.stringify(packageJson, null, 2),
-    "utf-8",
-  );
+  /** Bundle the package into single files for each format using esbuild (tsup style). */
+  bundleSingleFile: boolean;
+  /**
+   * Available extensions for generating exports wildcards.
+   * @default [".js", ".mjs", ".cjs"]
+   */
+  exportExtensions: string[];
 }
 
 export const buildCommand = new Command("build")
@@ -223,6 +109,16 @@ export const buildCommand = new Command("build")
     "Builds the package in a flat structure without subdirectories for each module type.",
     process.env.SSE_BUILD_FLAT === "1",
   )
+  .option(
+    "--bundleSingleFile",
+    "Bundle all modules into single files using esbuild (tsup style)",
+    false,
+  )
+  .option(
+    "--exportExtensions <exts...>",
+    "Available extensions for generating exports wildcards.",
+    [".js", ".mjs", ".cjs"],
+  )
   .option("--verbose", "Enable verbose logging.", false)
   .action(async (cliOptions: BuildOptions) => {
     const fileConfig = await loadConfig();
@@ -249,6 +145,10 @@ export const buildCommand = new Command("build")
       skipBabelRuntimeCheck: false,
       skipPackageJson: false,
       skipMainCheck: false,
+      bundleSingleFile:
+        cliOptions.bundleSingleFile ?? fileConfig.bundleSingleFile ?? false,
+      exportExtensions: cliOptions.exportExtensions ??
+        fileConfig.exportExtensions ?? [".js", ".mjs", ".cjs"],
     };
 
     const {
@@ -263,6 +163,8 @@ export const buildCommand = new Command("build")
       skipPackageJson = false,
       enableReactCompiler = false,
       tsgo: useTsgo = false,
+      bundleSingleFile,
+      exportExtensions,
     } = options;
 
     const cwd = process.cwd();
@@ -334,77 +236,137 @@ export const buildCommand = new Command("build")
       );
     }
 
-    // js build start
-    await Promise.all(
-      bundles.map(async (bundle) => {
-        const outExtension = getOutExtension(bundle, {
-          isFlat: !!options.flat,
-          isType: false,
-          packageType,
-        });
-        const relativeOutDir = relativeOutDirs[bundle];
-        const outputDir = path.join(buildDir, relativeOutDir);
-        await fs.mkdir(outputDir, { recursive: true });
+    if (bundleSingleFile) {
+      if (verbose)
+        console.log("📦 Bundling package into single files via esbuild...");
 
-        const promises: Promise<any>[] = [];
+      await Promise.all(
+        bundles.map(async (bundle) => {
+          const outExtension = getOutExtension(bundle, {
+            isFlat: !!options.flat,
+            isType: false,
+            packageType,
+          });
+          const relativeOutDir = relativeOutDirs[bundle];
+          const outputDir = path.join(buildDir, relativeOutDir);
+          await fs.mkdir(outputDir, { recursive: true });
 
-        promises.push(
-          babelBuild({
-            cwd,
-            sourceDir,
-            outDir: outputDir,
-            babelRuntimeVersion,
-            hasLargeFiles,
-            bundle,
-            verbose,
-            optimizeClsx:
-              packageJson.dependencies?.clsx !== undefined ||
-              packageJson.dependencies?.classnames !== undefined,
-            removePropTypes:
-              packageJson.dependencies?.["prop-types"] !== undefined,
-            pkgVersion: packageJson.version,
-            ignores: extraIgnores,
-            outExtension,
-            reactCompiler: enableReactCompiler
-              ? {
-                  reactVersion: reactVersion || "latest",
-                }
-              : undefined,
-          }),
-        );
+          await esbuild({
+            entryPoints: [path.join(sourceDir, "index.ts")],
+            bundle: true,
+            outfile: path.join(outputDir, `index${outExtension}`),
+            format: bundle === "esm" ? "esm" : "cjs",
+            target: ["es2020", "node14"],
+            minify: false,
+            external: [
+              ...Object.keys(packageJson.dependencies || {}),
+              ...Object.keys(packageJson.peerDependencies || {}),
+            ],
+          });
 
-        if (buildDir !== outputDir && !skipBundlePackageJson && !options.flat) {
-          promises.push(
-            fs.writeFile(
+          if (
+            buildDir !== outputDir &&
+            !skipBundlePackageJson &&
+            !options.flat
+          ) {
+            await fs.writeFile(
               path.join(outputDir, "package.json"),
               JSON.stringify({
                 type: bundle === "esm" ? "module" : "commonjs",
                 sideEffects: packageJson.sideEffects ?? false,
               }),
-            ),
+            );
+          }
+
+          await addLicense({
+            bundle,
+            license: packageJson.license,
+            name: packageJson.name,
+            version: packageJson.version,
+            outputDir,
+            isFlat: !!options.flat,
+            packageType,
+          });
+        }),
+      );
+    } else {
+      // -- REGULAR BABEL BUILD --
+      await Promise.all(
+        bundles.map(async (bundle) => {
+          const outExtension = getOutExtension(bundle, {
+            isFlat: !!options.flat,
+            isType: false,
+            packageType,
+          });
+          const relativeOutDir = relativeOutDirs[bundle];
+          const outputDir = path.join(buildDir, relativeOutDir);
+          await fs.mkdir(outputDir, { recursive: true });
+
+          const promises: Promise<any>[] = [];
+
+          promises.push(
+            babelBuild({
+              cwd,
+              sourceDir,
+              outDir: outputDir,
+              babelRuntimeVersion,
+              hasLargeFiles,
+              bundle,
+              verbose,
+              optimizeClsx:
+                packageJson.dependencies?.clsx !== undefined ||
+                packageJson.dependencies?.classnames !== undefined,
+              removePropTypes:
+                packageJson.dependencies?.["prop-types"] !== undefined,
+              pkgVersion: packageJson.version,
+              ignores: extraIgnores,
+              outExtension,
+              reactCompiler: enableReactCompiler
+                ? {
+                    reactVersion: reactVersion || "latest",
+                  }
+                : undefined,
+            }),
           );
-        }
 
-        if (!options.flat) {
-          promises.push(cjsCopy({ from: sourceDir, to: outputDir }));
-        }
+          if (
+            buildDir !== outputDir &&
+            !skipBundlePackageJson &&
+            !options.flat
+          ) {
+            promises.push(
+              fs.writeFile(
+                path.join(outputDir, "package.json"),
+                JSON.stringify({
+                  type: bundle === "esm" ? "module" : "commonjs",
+                  sideEffects: packageJson.sideEffects ?? false,
+                }),
+              ),
+            );
+          }
 
-        await Promise.all(promises);
-        await addLicense({
-          bundle,
-          license: packageJson.license,
-          name: packageJson.name,
-          version: packageJson.version,
-          outputDir,
-          isFlat: !!options.flat,
-          packageType,
-        });
-      }),
-    );
+          if (!options.flat) {
+            promises.push(cjsCopy({ from: sourceDir, to: outputDir }));
+          }
 
-    if (options.flat) {
-      await cjsCopy({ from: sourceDir, to: buildDir });
+          await Promise.all(promises);
+          await addLicense({
+            bundle,
+            license: packageJson.license,
+            name: packageJson.name,
+            version: packageJson.version,
+            outputDir,
+            isFlat: !!options.flat,
+            packageType,
+          });
+        }),
+      );
+
+      if (options.flat) {
+        await cjsCopy({ from: sourceDir, to: buildDir });
+      }
     }
+
     // js build end
 
     if (buildTypes) {
@@ -443,6 +405,7 @@ export const buildCommand = new Command("build")
       addTypes: buildTypes,
       isFlat: !!options.flat,
       packageType,
+      exportExtensions: options.exportExtensions,
     });
 
     await copyHandler({
@@ -468,18 +431,6 @@ async function copyHandler({
 }: CopyHandlerOptions) {
   const defaultFiles: (string | { targetPath: string; sourcePath: string })[] =
     [];
-
-  // const workspaceRoot = await findWorkspacesRoot(cwd);
-  // if (!workspaceRoot) {
-  //   throw new Error("Workspace directory not found");
-  // }
-
-  // const { location: workspaceDir } = workspaceRoot;
-  // const localOrRootFiles = [
-  //   [path.join(cwd, "README.md"), path.join(workspaceDir, "README.md")],
-  //   [path.join(cwd, "LICENSE"), path.join(workspaceDir, "LICENSE")],
-  //   [path.join(cwd, "CHANGELOG.md"), path.join(workspaceDir, "CHANGELOG.md")],
-  // ];
 
   const workspaceRoot = await findWorkspacesRoot(cwd);
 

@@ -257,6 +257,7 @@ interface CreatePackageExports {
   addTypes: boolean;
   isFlat: boolean;
   packageType: PackageType;
+  exportExtensions?: string[];
 }
 
 export async function createPackageExports({
@@ -267,6 +268,7 @@ export async function createPackageExports({
   addTypes = false,
   isFlat = false,
   packageType = "commonjs",
+  exportExtensions = [".js", ".mjs", ".cjs"],
 }: CreatePackageExports) {
   const resolvedPackageType = packageType === "module" ? "module" : "commonjs";
   const rawExports: PackageJson.ExportConditions =
@@ -290,8 +292,46 @@ export async function createPackageExports({
     exports: newExports,
   };
 
-  await Promise.all(
-    bundles.map(async ({ type, dir }) => {
+  // 1. AUTO-DISCOVERY: Scan the build output folder for generated files
+  const baseBundle = bundles.find((b) => b.type === "esm") || bundles[0];
+  const scanDir = isFlat ? outputDir : path.join(outputDir, baseBundle.dir);
+  const buildFiles = await globby("**/*", { cwd: scanDir });
+
+  const jsDirs = new Set<string>();
+  const otherFiles = new Set<string>();
+
+  for (const file of buildFiles) {
+    if (
+      file.endsWith(".d.ts") ||
+      file.endsWith(".d.mts") ||
+      file.endsWith(".d.cts")
+    ) {
+      continue;
+    }
+
+    const ext = path.extname(file);
+    const normalizedFile = file.split(path.sep).join(path.posix.sep);
+
+    if (exportExtensions.includes(ext)) {
+      jsDirs.add(path.posix.dirname(normalizedFile));
+    } else {
+      otherFiles.add(normalizedFile);
+    }
+  }
+
+  const getIndexFileName = (type: BundleType) =>
+    `index${getOutExtension(type, { isFlat, packageType: resolvedPackageType })}`;
+
+  const rootIndexExists = await fs
+    .stat(path.join(scanDir, getIndexFileName(baseBundle.type)))
+    .then((s) => s.isFile())
+    .catch(() => false);
+
+  if (rootIndexExists && originalExports["."] === undefined) {
+    newExports["."] ??= {};
+    const rootConditions = newExports["."] as PackageJson.ExportConditions;
+
+    for (const { type, dir: bundleDir } of bundles) {
       const outExtension = getOutExtension(type, {
         isFlat,
         packageType: resolvedPackageType,
@@ -301,82 +341,229 @@ export async function createPackageExports({
         isType: true,
         packageType: resolvedPackageType,
       });
-      const indexFileExists = await fs
-        .stat(path.join(outputDir, dir, `index${outExtension}`))
-        .then(
-          (stats) => stats.isFile(),
-          () => false,
-        );
-      const typeFileExists =
+
+      const dirPrefix = bundleDir === "." ? "" : `${bundleDir}/`;
+      const exportPath = `./${dirPrefix}index${outExtension}`;
+      const typeExportPath = `./${dirPrefix}index${typeOutExtension}`;
+
+      const typeExists =
         addTypes &&
         (await fs
-          .stat(path.join(outputDir, dir, `index${typeOutExtension}`))
+          .stat(path.join(outputDir, bundleDir, `index${typeOutExtension}`))
+          .then((s) => s.isFile())
+          .catch(() => false));
+
+      const conditionKey = type === "cjs" ? "require" : "import";
+      rootConditions[conditionKey] = typeExists
+        ? { types: typeExportPath, default: exportPath }
+        : exportPath;
+
+      if (type === "cjs" || (type === "esm" && bundles.length === 1)) {
+        result.main = exportPath;
+        if (typeExists) result.types = typeExportPath;
+      }
+    }
+  }
+
+  for (const dir of jsDirs) {
+    // 2a. Directory Globs (e.g. `./*`, `./r/*`)
+    const globKey = dir === "." ? "./*" : `./${dir}/*`;
+    if (originalExports[globKey] === undefined) {
+      newExports[globKey] ??= {};
+      const globConditions = newExports[
+        globKey
+      ] as PackageJson.ExportConditions;
+
+      for (const { type, dir: bundleDir } of bundles) {
+        const outExtension = getOutExtension(type, {
+          isFlat,
+          packageType: resolvedPackageType,
+        });
+        const typeOutExtension = getOutExtension(type, {
+          isFlat,
+          isType: true,
+          packageType: resolvedPackageType,
+        });
+
+        const dirPrefix = bundleDir === "." ? "" : `${bundleDir}/`;
+        const basePath = dir === "." ? "" : `${dir}/`;
+
+        const exportPath = `./${dirPrefix}${basePath}*${outExtension}`;
+        const typeExportPath = `./${dirPrefix}${basePath}*${typeOutExtension}`;
+
+        const conditionKey = type === "cjs" ? "require" : "import";
+
+        globConditions[conditionKey] = addTypes
+          ? { types: typeExportPath, default: exportPath }
+          : exportPath;
+      }
+    }
+
+    // 2b. Sub-directory Index Exports (e.g. if `utils/index.js` exists, export `./utils`)
+    if (dir !== ".") {
+      const dirIndexExists = await fs
+        .stat(path.posix.join(scanDir, dir, getIndexFileName(baseBundle.type)))
+        .then((s) => s.isFile())
+        .catch(() => false);
+
+      const dirKey = `./${dir}`;
+      if (dirIndexExists && originalExports[dirKey] === undefined) {
+        newExports[dirKey] ??= {};
+        const dirConditions = newExports[
+          dirKey
+        ] as PackageJson.ExportConditions;
+
+        for (const { type, dir: bundleDir } of bundles) {
+          const outExtension = getOutExtension(type, {
+            isFlat,
+            packageType: resolvedPackageType,
+          });
+          const typeOutExtension = getOutExtension(type, {
+            isFlat,
+            isType: true,
+            packageType: resolvedPackageType,
+          });
+
+          const dirPrefix = bundleDir === "." ? "" : `${bundleDir}/`;
+          const basePath = `${dir}/`;
+          const exportPath = `./${dirPrefix}${basePath}index${outExtension}`;
+          const typeExportPath = `./${dirPrefix}${basePath}index${typeOutExtension}`;
+
+          const typeExists =
+            addTypes &&
+            (await fs
+              .stat(
+                path.join(
+                  outputDir,
+                  bundleDir,
+                  dir,
+                  `index${typeOutExtension}`,
+                ),
+              )
+              .then((s) => s.isFile())
+              .catch(() => false));
+
+          const conditionKey = type === "cjs" ? "require" : "import";
+          dirConditions[conditionKey] = typeExists
+            ? { types: typeExportPath, default: exportPath }
+            : exportPath;
+        }
+      }
+    }
+  }
+
+  for (const file of otherFiles) {
+    const exportKey = `./${file}`;
+    if (originalExports[exportKey] !== undefined) continue;
+
+    const dirPrefix = baseBundle.dir === "." ? "" : `${baseBundle.dir}/`;
+    newExports[exportKey] = `./${dirPrefix}${file}`;
+  }
+
+  const exportKeys = Object.keys(originalExports);
+  for (const key of exportKeys) {
+    const importPath = originalExports[key];
+    if (!importPath) {
+      newExports[key] = null;
+      continue;
+    }
+
+    if (key === ".") continue;
+    await Promise.all(
+      bundles.map(async ({ type, dir }) => {
+        const outExtension = getOutExtension(type, {
+          isFlat,
+          packageType: resolvedPackageType,
+        });
+        const typeOutExtension = getOutExtension(type, {
+          isFlat,
+          isType: true,
+          packageType: resolvedPackageType,
+        });
+        const indexFileExists = await fs
+          .stat(path.join(outputDir, dir, `index${outExtension}`))
           .then(
             (stats) => stats.isFile(),
             () => false,
-          ));
-      const dirPrefix = dir === "." ? "" : `${dir}/`;
-      const exportDir = `./${dirPrefix}index${outExtension}`;
-      const typeExportDir = `./${dirPrefix}index${typeOutExtension}`;
-
-      if (indexFileExists) {
-        // skip `packageJson.module` to support parcel and some older bundlers
-        if (type === "cjs") {
-          result.main = exportDir;
-        }
-
-        if (
-          typeof newExports["."] === "string" ||
-          Array.isArray(newExports["."])
-        ) {
-          throw new Error(
-            `The export "." is already defined as a string or Array.`,
           );
+        const typeFileExists =
+          addTypes &&
+          (await fs
+            .stat(path.join(outputDir, dir, `index${typeOutExtension}`))
+            .then(
+              (stats) => stats.isFile(),
+              () => false,
+            ));
+        const dirPrefix = dir === "." ? "" : `${dir}/`;
+        const exportDir = `./${dirPrefix}index${outExtension}`;
+        const typeExportDir = `./${dirPrefix}index${typeOutExtension}`;
+
+        if (indexFileExists && originalExports["."] !== undefined) {
+          // skip `packageJson.module` to support parcel and some older bundlers
+          if (type === "cjs") {
+            result.main = exportDir;
+          }
+
+          if (
+            typeof newExports["."] === "string" ||
+            Array.isArray(newExports["."])
+          ) {
+            throw new Error(
+              `The export "." is already defined as a string or Array.`,
+            );
+          }
+
+          newExports["."] ??= {};
+
+          const rootConditions = newExports[
+            "."
+          ] as PackageJson.ExportConditions;
+          rootConditions[type === "cjs" ? "require" : "import"] = typeFileExists
+            ? {
+                types: typeExportDir,
+                default: exportDir,
+              }
+            : exportDir;
+        }
+        if (typeFileExists && type === "cjs") {
+          result.types = typeExportDir;
         }
 
-        newExports["."] ??= {};
-        newExports["."][type === "cjs" ? "require" : "import"] = typeFileExists
-          ? {
-              types: typeExportDir,
-              default: exportDir,
-            }
-          : exportDir;
-      }
-      if (typeFileExists && type === "cjs") {
-        result.types = typeExportDir;
-      }
-      const exportKeys = Object.keys(originalExports);
-      // need to maintain the order of exports
-      for (const key of exportKeys) {
-        const importPath = originalExports[key];
-        if (!importPath) {
-          newExports[key] = null;
-          continue;
+        // Handle custom manually declared non-root exports
+        const exportKeys = Object.keys(originalExports);
+        for (const key of exportKeys) {
+          const importPath = originalExports[key];
+          if (!importPath) {
+            newExports[key] = null;
+            continue;
+          }
+          if (key === ".") continue;
+
+          await createExportsFor({
+            importPath,
+            key,
+            cwd,
+            dir,
+            type,
+            newExports,
+            typeOutExtension,
+            outExtension,
+            addTypes,
+          });
         }
-        // eslint-disable-next-line no-await-in-loop
-        await createExportsFor({
-          importPath,
-          key,
-          cwd,
-          dir,
-          type,
-          newExports,
-          typeOutExtension,
-          outExtension,
-          addTypes,
-        });
-      }
-    }),
-  );
+      }),
+    );
+  }
 
   bundles.forEach(({ dir }) => {
     if (dir !== ".") {
       newExports[`./${dir}`] = null;
+      newExports[`./${dir}/*`] = null;
     }
   });
 
   Object.keys(newExports).forEach((key) => {
-    const exportVal = newExports[key];
+    const exportVal = newExports[key] as PackageJson.ExportConditions;
     if (Array.isArray(exportVal)) {
       throw new Error(
         `Array form of package.json exports is not supported yet. Found in export "${key}".`,
@@ -606,4 +793,128 @@ export async function mapConcurrently<T, R>(
 
   await Promise.all(workers);
   return results;
+}
+
+interface AddLicenseOptions {
+  name?: string;
+  version?: string;
+  license?: string;
+  isFlat: boolean;
+  packageType?: "module" | "commonjs";
+  bundle: BundleType;
+  outputDir: string;
+}
+
+export async function addLicense({
+  name,
+  version,
+  license,
+  bundle,
+  outputDir,
+  isFlat,
+  packageType,
+}: AddLicenseOptions) {
+  const outExtension = getOutExtension(bundle, { isFlat, packageType });
+  const file = path.join(outputDir, `index${outExtension}`);
+
+  if (
+    !(await fs.stat(file).then(
+      (stats) => stats.isFile(),
+      () => false,
+    ))
+  ) {
+    return;
+  }
+
+  const content = await fs.readFile(file, { encoding: "utf8" });
+  await fs.writeFile(
+    file,
+    `/**
+ * ${name} v${version}
+ *
+ * @license ${license}
+ * This source code is licensed under the ${license} license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+${content}`,
+    { encoding: "utf8" },
+  );
+  if (process.env.SSE_BUILD_VERBOSE) console.log(`License added to ${file}`);
+}
+
+interface WritePackageJsonOptions {
+  packageJson: PackageJson;
+  bundles: { type: BundleType; dir: string }[];
+  outputDir: string;
+  cwd: string;
+  addTypes?: boolean;
+  isFlat?: boolean;
+  packageType?: PackageType;
+  exportExtensions?: string[];
+}
+
+export async function writePackageJson({
+  packageJson,
+  bundles,
+  outputDir,
+  cwd,
+  addTypes = false,
+  isFlat = false,
+  packageType,
+  exportExtensions,
+}: WritePackageJsonOptions) {
+  delete packageJson.scripts;
+  delete packageJson.publishConfig?.directory;
+  delete packageJson.devDependencies;
+  delete packageJson.imports;
+
+  const resolvedPackageType = packageType || packageJson.type || "commonjs";
+  packageJson.type = resolvedPackageType;
+
+  const originalExports = packageJson.exports;
+  delete packageJson.exports;
+  const originalBin = packageJson.bin;
+  delete packageJson.bin;
+
+  const {
+    exports: packageExports,
+    main,
+    types,
+  } = await createPackageExports({
+    exports: originalExports,
+    bundles,
+    outputDir,
+    cwd,
+    addTypes,
+    isFlat,
+    packageType: resolvedPackageType,
+    exportExtensions,
+  });
+
+  packageJson.exports = packageExports;
+  if (main) {
+    packageJson.main = main;
+  }
+
+  if (types) {
+    packageJson.types = types;
+  }
+
+  const bin = await createPackageBin({
+    bin: originalBin,
+    bundles,
+    cwd,
+    isFlat,
+    packageType: resolvedPackageType,
+  });
+
+  if (bin) {
+    packageJson.bin = bin;
+  }
+
+  await fs.writeFile(
+    path.join(outputDir, "package.json"),
+    JSON.stringify(packageJson, null, 2),
+    "utf-8",
+  );
 }

@@ -1,7 +1,7 @@
 import { loadConfig as loadC12Config } from "c12";
 import { BuildOptions } from "../config";
 
-export async function loadConfig(): Promise<BuildOptions> {
+export async function loadConfig(): Promise<Partial<BuildOptions>> {
   try {
     const { config, configFile } = await loadC12Config<BuildOptions>({
       name: "sse",
