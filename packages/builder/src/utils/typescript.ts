@@ -57,7 +57,7 @@ export async function emitDeclarations(
   const tsgoPath = useTsgo ? await findTsgo(tsconfigDir) : null;
   if (useTsgo && !tsgoPath) {
     throw new Error(
-      '--tsgo flag was passed or MUI_USE_TSGO environment was set but no tsgo cli was found. Either remove the flag to use tsc or install the native package "@typescript/native-preview" at the workspace level to use tsgo.',
+      '--tsgo flag was passed or SSE_USE_TSGO environment was set but no tsgo cli was found. Either remove the flag to use tsc or install the native package "@typescript/native-preview" at the workspace level to use tsgo.',
     );
   }
 

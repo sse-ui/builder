@@ -16,7 +16,7 @@ async function main() {
 
   program
     .name("sse-tools")
-    .description("CLI utilities for managing and building MUI packages")
+    .description("CLI utilities for managing and building SSE packages")
     .version("1.0.0");
 
   program.addCommand(buildCommand);

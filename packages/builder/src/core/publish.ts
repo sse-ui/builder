@@ -3,18 +3,12 @@ import * as path from "node:path";
 import { Command } from "commander";
 import { $ } from "execa";
 import { PackageJson } from "./packageJson";
+import { getPackageManager } from "../utils/package-manager";
 
 /**
  * Auto-detects the package manager currently being used.
  * Looks at the npm_config_user_agent environment variable.
  */
-function getPackageManager(): "npm" | "yarn" | "pnpm" {
-  const userAgent = process.env.npm_config_user_agent || "";
-  if (userAgent.includes("pnpm")) return "pnpm";
-  if (userAgent.includes("yarn")) return "yarn";
-  return "npm";
-}
-
 export const publishCommand = new Command("publish")
   .description(
     "Automatically publishes the built package from the publishConfig.directory",

@@ -18,6 +18,7 @@ import {
 } from "../utils/build";
 import { PackageJson } from "./packageJson";
 import { loadConfig } from "../utils/loadConfig";
+import { getPackageManager } from "../utils/package-manager";
 
 export interface BuildOptions {
   /** The bundles to build. */
@@ -189,13 +190,28 @@ export const buildCommand = new Command("build")
 
     await fs.rm(buildDir, { recursive: true, force: true });
 
+    const pm = getPackageManager();
     let babelRuntimeVersion = packageJson.dependencies?.["@babel/runtime"];
     if (babelRuntimeVersion === "catalog:") {
-      // resolve the version from the given package
-      // outputs the pnpm-workspace.yaml config as json
-      const { stdout: configStdout } = await $`pnpm config list --json`;
-      const pnpmWorkspaceConfig = JSON.parse(configStdout);
-      babelRuntimeVersion = pnpmWorkspaceConfig.catalog["@babel/runtime"];
+      if (pm === "pnpm") {
+        try {
+          // resolve the version from the given package
+          // outputs the pnpm-workspace.yaml config as json
+          const { stdout: configStdout } = await $`pnpm config list --json`;
+          const pnpmWorkspaceConfig = JSON.parse(configStdout);
+          babelRuntimeVersion = pnpmWorkspaceConfig.catalog["@babel/runtime"];
+        } catch (error) {
+          console.warn(
+            `\n⚠️ Failed to resolve 'catalog:' using pnpm. Falling back to default.`,
+          );
+          babelRuntimeVersion = "^7.25.0";
+        }
+      } else {
+        console.warn(
+          `\n⚠️ 'catalog:' dependency found but package manager is ${pm}. Falling back to default babel runtime version.`,
+        );
+        babelRuntimeVersion = "^7.25.0";
+      }
     }
 
     if (!babelRuntimeVersion && !skipBabelRuntimeCheck) {

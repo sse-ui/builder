@@ -24,11 +24,11 @@ export function getVersionEnvVariables(
   }
 
   return {
-    MUI_VERSION: pkgVersion,
-    MUI_MAJOR_VERSION: major,
-    MUI_MINOR_VERSION: minor,
-    MUI_PATCH_VERSION: patch,
-    MUI_PRERELEASE: prerelease,
+    SSE_VERSION: pkgVersion,
+    SSE_MAJOR_VERSION: major,
+    SSE_MINOR_VERSION: minor,
+    SSE_PATCH_VERSION: patch,
+    SSE_PRERELEASE: prerelease,
   };
 }
 
@@ -125,14 +125,14 @@ export async function build({
   const env: Record<string, string | undefined> = {
     NODE_ENV: "production",
     BABEL_ENV: bundle === "esm" ? "stable" : "node",
-    MUI_BUILD_VERBOSE: verbose ? "true" : undefined,
-    MUI_OPTIMIZE_CLSX: optimizeClsx ? "true" : undefined,
-    MUI_REMOVE_PROP_TYPES: removePropTypes ? "true" : undefined,
-    MUI_BABEL_RUNTIME_VERSION: babelRuntimeVersion,
-    MUI_OUT_FILE_EXTENSION: outExtension ?? ".js",
+    SSE_BUILD_VERBOSE: verbose ? "true" : undefined,
+    SSE_OPTIMIZE_CLSX: optimizeClsx ? "true" : undefined,
+    SSE_REMOVE_PROP_TYPES: removePropTypes ? "true" : undefined,
+    SSE_BABEL_RUNTIME_VERSION: babelRuntimeVersion,
+    SSE_OUT_FILE_EXTENSION: outExtension ?? ".js",
     ...getVersionEnvVariables(pkgVersion),
-    MUI_REACT_COMPILER: reactVersion ? "1" : "0",
-    MUI_REACT_COMPILER_REACT_VERSION: reactVersion,
+    SSE_REACT_COMPILER: reactVersion ? "1" : "0",
+    SSE_REACT_COMPILER_REACT_VERSION: reactVersion,
   };
 
   const resolvedOutExtension = outExtension ?? ".js";

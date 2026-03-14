@@ -60,11 +60,11 @@ export function getBaseConfig({
       pluginTransformInlineEnvVars,
       {
         include: [
-          "MUI_VERSION",
-          "MUI_MAJOR_VERSION",
-          "MUI_MINOR_VERSION",
-          "MUI_PATCH_VERSION",
-          "MUI_PRERELEASE",
+          "SSE_VERSION",
+          "SSE_MAJOR_VERSION",
+          "SSE_MINOR_VERSION",
+          "SSE_PATCH_VERSION",
+          "SSE_PRERELEASE",
         ],
       },
       "babel-plugin-transform-inline-environment-variables",
@@ -175,15 +175,15 @@ export default function getBabelConfig(
   }
 
   return getBaseConfig({
-    debug: process.env.MUI_BUILD_VERBOSE === "true",
+    debug: process.env.SSE_BUILD_VERBOSE === "true",
     bundle,
-    outExtension: process.env.MUI_OUT_FILE_EXTENSION || null,
+    outExtension: process.env.SSE_OUT_FILE_EXTENSION || null,
     // any package needs to declare 7.25.0 as a runtime dependency. default is ^7.0.0
-    runtimeVersion: process.env.MUI_BABEL_RUNTIME_VERSION || "^7.25.0",
-    optimizeClsx: process.env.MUI_OPTIMIZE_CLSX === "true",
-    removePropTypes: process.env.MUI_REMOVE_PROP_TYPES === "true",
+    runtimeVersion: process.env.SSE_BABEL_RUNTIME_VERSION || "^7.25.0",
+    optimizeClsx: process.env.SSE_OPTIMIZE_CLSX === "true",
+    removePropTypes: process.env.SSE_REMOVE_PROP_TYPES === "true",
     noResolveImports,
-    reactCompilerReactVersion: process.env.MUI_REACT_COMPILER_REACT_VERSION,
-    reactCompilerMode: process.env.MUI_REACT_COMPILER_MODE,
+    reactCompilerReactVersion: process.env.SSE_REACT_COMPILER_REACT_VERSION,
+    reactCompilerMode: process.env.SSE_REACT_COMPILER_MODE,
   });
 }
