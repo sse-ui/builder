@@ -49,7 +49,6 @@ export async function cjsCopy({ from, to }: CjsCopyOptions): Promise<void> {
   }
 
   const files = await globby("**/*.cjs", { cwd: from });
-
   const cmds = files.map((file) =>
     fs.cp(path.resolve(from, file), path.resolve(to, file)),
   );
@@ -97,16 +96,13 @@ export async function build({
   ignores = [],
   reactCompiler,
 }: BuildOptions): Promise<void> {
-  console.log(
-    `Transpiling files to "${path.relative(path.dirname(sourceDir), outDir)}" for "${bundle}" bundle.`,
-  );
+  if (verbose) {
+    console.log(
+      `Transpiling files to "${path.relative(path.dirname(sourceDir), outDir)}" for "${bundle}" bundle.`,
+    );
+  }
 
   const workspaceDir = await findWorkspacesRoot(cwd);
-
-  // if (!workspaceDir) {
-  //   throw new Error(`No workspace found for ${cwd}`);
-  // }
-
   const rootDir = workspaceDir ? workspaceDir.location : cwd;
 
   let configFile = path.join(rootDir, "babel.config.js");

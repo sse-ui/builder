@@ -1,6 +1,6 @@
 {
   "name": "@sse-ui/builder",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Builder By SSE",
   "type": "module",
   "scripts": {
@@ -31,6 +31,7 @@
     "@types/node": "^25.4.0",
     "@types/resolve": "^1.20.6",
     "@types/semver": "^7.7.1",
+    "prettier": "^3.8.1",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },
@@ -46,7 +47,9 @@
     "babel-plugin-transform-inline-environment-variables": "^0.4.4",
     "babel-plugin-transform-react-remove-prop-types": "^0.4.24",
     "c12": "^4.0.0-beta.3",
+    "chalk": "^5.6.2",
     "commander": "^14.0.3",
+    "enquirer": "^2.4.1",
     "esbuild": "^0.27.4",
     "execa": "^9.6.1",
     "find-workspaces": "^0.3.1",

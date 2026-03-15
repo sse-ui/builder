@@ -16,11 +16,13 @@ function extractPaths(exportsObj: any): string[] {
   if (typeof exportsObj === "string") {
     return [exportsObj];
   }
+
   if (typeof exportsObj === "object" && exportsObj !== null) {
     for (const key of Object.values(exportsObj)) {
       paths = paths.concat(extractPaths(key));
     }
   }
+
   return paths;
 }
 
@@ -29,6 +31,7 @@ export const checkExportsCommand = new Command("check-exports")
     "Verifies that all files declared in package.json 'exports' actually exist in the build folder",
   )
   .action(async () => {
+    const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
     const cwd = process.cwd();
     const pkgJsonPath = path.join(cwd, "package.json");
 
@@ -36,8 +39,10 @@ export const checkExportsCommand = new Command("check-exports")
       const rootPkgContent = await fs.readFile(pkgJsonPath, {
         encoding: "utf8",
       });
+
       const publishDirBase =
         JSON.parse(rootPkgContent).publishConfig?.directory || "build";
+
       const buildPkgPath = path.join(cwd, publishDirBase, "package.json");
 
       if (!(await fileExists(buildPkgPath))) {
@@ -52,7 +57,7 @@ export const checkExportsCommand = new Command("check-exports")
       const buildPkg: PackageJson = JSON.parse(buildPkgContent);
 
       if (!buildPkg.exports) {
-        console.log("⚠️ No 'exports' field found to check.");
+        if (isVerbose) console.log("⚠️ No 'exports' field found to check.");
         return;
       }
 
@@ -66,7 +71,7 @@ export const checkExportsCommand = new Command("check-exports")
         const exists = await fileExists(absolutePath);
 
         if (exists) {
-          console.log(`  ✅ Found: ${relativePath}`);
+          if (isVerbose) console.log(`  ✅ Found: ${relativePath}`);
         } else {
           console.error(`  ❌ Missing: ${relativePath}`);
           hasErrors = true;

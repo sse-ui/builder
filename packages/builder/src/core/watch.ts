@@ -1,8 +1,9 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Command } from "commander";
-import chokidar from "chokidar";
+import chokidar, { FSWatcher } from "chokidar";
 import { $ } from "execa";
+import { build as esbuild } from "esbuild";
 import { findWorkspacesRoot } from "find-workspaces";
 import { loadConfig } from "../utils/loadConfig";
 import {
@@ -12,248 +13,282 @@ import {
 } from "../utils/build";
 import { getVersionEnvVariables } from "../utils/babel";
 import { PackageJson } from "./packageJson";
-import { getPackageManager } from "../utils/package-manager";
+import { getPackageManager, getPmExec } from "../utils/package-manager";
 
 export const watchCommand = new Command("watch")
   .description(
     "Watches the src directory and incrementally rebuilds files on changes (Vite-style)",
   )
-  .option("--verbose", "Enable verbose logging.", false)
-  .action(async (option: { verbose: boolean }) => {
+  .action(async () => {
     const cwd = process.cwd();
     const srcDir = path.join(cwd, "src");
     const pkgJsonPath = path.join(cwd, "package.json");
 
-    // 1. Initial configuration load
-    const packageJsonContent = await fs.readFile(pkgJsonPath, {
-      encoding: "utf8",
-    });
-    const packageJson: PackageJson = JSON.parse(packageJsonContent);
+    let watcher: FSWatcher | null = null;
+    let configWatcher: FSWatcher | null = null;
 
-    const buildDirBase = packageJson.publishConfig?.directory || "build";
-    const buildDir = path.join(cwd, buildDirBase);
-
-    const fileConfig = await loadConfig();
-    const bundles: BundleType[] = fileConfig.bundle || ["esm", "cjs"];
-    const isFlat = fileConfig.flat ?? false;
-    const packageType = packageJson.type === "module" ? "module" : "commonjs";
-
-    const workspaceDir = await findWorkspacesRoot(cwd);
-    const rootDir = workspaceDir ? workspaceDir.location : cwd;
-
-    // Resolve Babel Config
-    let configFile = path.join(rootDir, "babel.config.js");
-    const exists = await fs
-      .stat(configFile)
-      .then(() => true)
-      .catch(() => false);
-    if (!exists) {
-      configFile = path.join(rootDir, "babel.config.mjs");
-    }
-
-    // Resolve Babel Runtime Version
-    const pm = getPackageManager();
-    let babelRuntimeVersion = packageJson.dependencies?.["@babel/runtime"];
-    if (babelRuntimeVersion === "catalog:") {
-      if (pm === "pnpm") {
-        try {
-          const { stdout } = await $`pnpm config list --json`;
-          babelRuntimeVersion = JSON.parse(stdout).catalog?.["@babel/runtime"];
-        } catch (e) {
-          // ignore gracefully
-        }
-      } else {
-        console.warn(
-          `\n⚠️ 'catalog:' dependency found but package manager is ${pm}. Falling back to default babel runtime version.`,
-        );
-        babelRuntimeVersion = "^7.25.0"; // Safe fallback
-      }
-    }
-    const reactVersion = packageJson.peerDependencies?.react || "latest";
-
-    console.log(`👀 Watching for changes in ./src...`);
-
-    // 2. Perform an initial full build so all files & TS types are present first
-    try {
-      console.log(`\n⏳ Running initial full build...`);
-      await $({ stdio: "inherit", preferLocal: true })`npx sse-tools build`;
-      if (option.verbose)
-        console.log(
-          `✅ Initial build completed successfully! Waiting for changes...\n`,
-        );
-    } catch (err) {
-      console.error(
-        `❌ Initial build failed. Watching for changes to fix errors...\n`,
-      );
-    }
-
-    // 3. Incrementally compile a single file directly with Babel
-    const buildFile = async (filePath: string) => {
-      const relativePath = path.relative(srcDir, filePath);
-      const ext = path.extname(filePath);
-
-      // Skip non-compilable files or TypeScript declarations
-      if (
-        ![".js", ".jsx", ".ts", ".tsx"].includes(ext) ||
-        filePath.endsWith(".d.ts")
-      ) {
-        return;
+    const startWatcher = async (isReload = false) => {
+      if (watcher) {
+        await watcher.close();
       }
 
-      console.log(`🔄 Rebuilding ${relativePath}...`);
+      const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
+      if (isReload) {
+        console.log(`\n🔄 Configuration change detected. Reloading...`);
+      }
 
-      await Promise.all(
-        bundles.map(async (bundle) => {
-          const outExtension = getOutExtension(bundle, {
-            isFlat,
-            packageType,
-            isType: false,
-          });
-          const relativeOutDir = isFlat ? "." : bundle === "esm" ? "esm" : ".";
-          const outputDir = path.join(buildDir, relativeOutDir);
+      const packageJsonContent = await fs.readFile(pkgJsonPath, "utf8");
+      const packageJson: PackageJson = JSON.parse(packageJsonContent);
+      const buildDirBase = packageJson.publishConfig?.directory || "build";
+      const buildDir = path.join(cwd, buildDirBase);
 
-          const outRelativePath = relativePath.replace(
-            new RegExp(`\\${ext}$`),
-            outExtension,
-          );
-          const outFilePath = path.join(outputDir, outRelativePath);
+      const fileConfig = await loadConfig();
+      const bundles: BundleType[] = fileConfig.bundle || ["esm", "cjs"];
+      const isFlat = fileConfig.flat ?? false;
+      const packageType = packageJson.type === "module" ? "module" : "commonjs";
 
-          await fs.mkdir(path.dirname(outFilePath), { recursive: true });
+      // Determine Builder
+      const isEsbuild = !!fileConfig.esbuild;
+      const builder = isEsbuild ? "esbuild" : "babel";
 
-          const env: Record<string, string | undefined> = {
-            NODE_ENV: "production",
-            BABEL_ENV: bundle === "esm" ? "stable" : "node",
-            SSE_OUT_FILE_EXTENSION: outExtension,
-            SSE_BABEL_RUNTIME_VERSION: babelRuntimeVersion,
-            SSE_REACT_COMPILER_REACT_VERSION: fileConfig.enableReactCompiler
-              ? reactVersion
-              : undefined,
-            ...getVersionEnvVariables(packageJson.version),
-          };
+      const workspaceDir = await findWorkspacesRoot(cwd);
+      const rootDir = workspaceDir ? workspaceDir.location : cwd;
+
+      const pm = getPackageManager();
+      const pmExec = getPmExec();
+
+      let babelRuntimeVersion = packageJson.dependencies?.["@babel/runtime"];
+      const reactVersion = packageJson.peerDependencies?.react || "latest";
+
+      console.log(`👀 Watching for changes (Builder: ${builder})...`);
+
+      // 1. Initial Build
+      try {
+        await $({
+          stdio: "inherit",
+          preferLocal: true,
+        })`${pmExec} sse-tools build`;
+      } catch (err) {
+        console.error(`❌ Initial build failed. Waiting for changes...\n`);
+      }
+
+      // 2. Incremental Build Logic
+      const buildFile = async (filePath: string) => {
+        const relativePath = path.relative(srcDir, filePath);
+
+        if (builder === "esbuild") {
+          if (isVerbose)
+            console.log(
+              `🚀 [esbuild] Incremental rebuild triggered by ${relativePath}...`,
+            );
+
+          const esbuildConfig = fileConfig.esbuild!;
+          const entryPoints =
+            typeof esbuildConfig.entry === "string"
+              ? [esbuildConfig.entry]
+              : esbuildConfig.entry;
 
           try {
-            // Add preferLocal: true and explicit --extensions to fix the TS compilation bug
-            await $({
-              stdio: "pipe",
-              preferLocal: true,
-              env: { ...process.env, ...env },
-            })`babel --config-file ${configFile} --extensions .js,.jsx,.ts,.tsx ${filePath} --out-file ${outFilePath}`;
-          } catch (error: any) {
-            console.error(
-              `❌ Failed to compile ${relativePath} for ${bundle}:`,
+            await Promise.all(
+              bundles.map(async (bundle) => {
+                const outExtension = getOutExtension(bundle, {
+                  isFlat,
+                  packageType,
+                });
+                const relativeOutDir = isFlat
+                  ? "."
+                  : bundle === "esm"
+                    ? "esm"
+                    : ".";
+                const outputDir = path.join(buildDir, relativeOutDir);
+
+                await esbuild({
+                  entryPoints: entryPoints as string[] | Record<string, string>,
+                  bundle: true,
+                  outdir: outputDir,
+                  format: bundle === "esm" ? "esm" : "cjs",
+                  target: esbuildConfig.target || ["es2020", "node14"],
+                  minify: esbuildConfig.minify ?? false,
+                  outExtension: { ".js": outExtension },
+                  external: [
+                    ...Object.keys(packageJson.dependencies || {}),
+                    ...Object.keys(packageJson.peerDependencies || {}),
+                    ...(esbuildConfig.external || []),
+                  ],
+                });
+              }),
             );
-            console.error(error.stderr || error.message);
+            if (isVerbose) console.log(`✅ [esbuild] Rebuild complete.`);
+          } catch (err: any) {
+            console.error(`❌ [esbuild] Rebuild failed:`, err.message);
           }
-        }),
-      );
-      console.log(`✅ Updated ${relativePath}`);
-    };
+        } else {
+          // BABEL LOGIC (Individual file transpilation)
+          const ext = path.extname(filePath);
+          if (
+            ![".js", ".jsx", ".ts", ".tsx"].includes(ext) ||
+            filePath.endsWith(".d.ts")
+          )
+            return;
 
-    // 4. Update package.json exports dynamically
-    const updateExports = async () => {
-      console.log(`📦 Updating exports in ${buildDirBase}/package.json...`);
-      try {
-        const freshPkgContent = await fs.readFile(pkgJsonPath, {
-          encoding: "utf8",
-        });
-        const freshPkg: PackageJson = JSON.parse(freshPkgContent);
+          let babelConfigFile = path.join(rootDir, "babel.config.js");
+          if (
+            !(await fs
+              .stat(babelConfigFile)
+              .then(() => true)
+              .catch(() => false))
+          ) {
+            babelConfigFile = path.join(rootDir, "babel.config.mjs");
+          }
 
-        const relativeOutDirs: Record<BundleType, string> = !isFlat
-          ? { cjs: ".", esm: "esm" }
-          : { cjs: ".", esm: "." };
+          await Promise.all(
+            bundles.map(async (bundle) => {
+              const outExtension = getOutExtension(bundle, {
+                isFlat,
+                packageType,
+              });
+              const relativeOutDir = isFlat
+                ? "."
+                : bundle === "esm"
+                  ? "esm"
+                  : ".";
+              const outputDir = path.join(buildDir, relativeOutDir);
+              const outFilePath = path.join(
+                outputDir,
+                relativePath.replace(new RegExp(`\\${ext}$`), outExtension),
+              );
 
-        await writePackageJson({
-          cwd,
-          packageJson: freshPkg,
-          bundles: bundles.map((type) => ({
-            type,
-            dir: relativeOutDirs[type],
-          })),
-          outputDir: buildDir,
-          addTypes: fileConfig.buildTypes ?? true,
-          isFlat,
-          packageType,
-          exportExtensions: fileConfig.exportExtensions,
-        });
-        console.log(`✅ Exports updated.`);
-      } catch (error: any) {
-        console.error(`❌ Failed to update exports: ${error.message}`);
-      }
-    };
+              await fs.mkdir(path.dirname(outFilePath), { recursive: true });
 
-    // Debounce updateExports to prevent race conditions on folder deletes/adds
-    let exportTimeout: NodeJS.Timeout;
-    const debouncedUpdateExports = () => {
-      clearTimeout(exportTimeout);
-      exportTimeout = setTimeout(async () => {
-        await updateExports();
-      }, 150);
-    };
+              const env = {
+                NODE_ENV: "production",
+                BABEL_ENV: bundle === "esm" ? "stable" : "node",
+                SSE_OUT_FILE_EXTENSION: outExtension,
+                SSE_BABEL_RUNTIME_VERSION: babelRuntimeVersion,
+                ...getVersionEnvVariables(packageJson.version),
+              };
 
-    // 5. Setup file system Watcher
-    const watcher = chokidar.watch(srcDir, {
-      ignored: /(^|[\/\\])\../, // ignore dotfiles
-      persistent: true,
-      ignoreInitial: true, // Don't trigger on startup, we handled it with full build
-    });
+              await $({
+                stdio: "pipe",
+                preferLocal: true,
+                env: { ...process.env, ...env },
+              })`babel --config-file ${babelConfigFile} --extensions .js,.jsx,.ts,.tsx ${filePath} --out-file ${outFilePath}`;
+            }),
+          );
+          if (isVerbose) console.log(`✅ [babel] Updated ${relativePath}`);
+        }
+      };
 
-    watcher
-      .on("change", async (filePath) => {
-        await buildFile(filePath);
-      })
-      .on("add", async (filePath) => {
-        await buildFile(filePath);
-        debouncedUpdateExports();
-      })
-      .on("unlink", async (filePath) => {
-        const relativePath = path.relative(srcDir, filePath);
-        console.log(`🗑️  Removed file ${relativePath}`);
-        const ext = path.extname(filePath);
+      // 3. Update Exports
+      const updateExports = async () => {
+        try {
+          const freshPkg: PackageJson = JSON.parse(
+            await fs.readFile(pkgJsonPath, "utf8"),
+          );
+          const relativeOutDirs: Record<BundleType, string> = !isFlat
+            ? { cjs: ".", esm: "esm" }
+            : { cjs: ".", esm: "." };
 
-        for (const bundle of bundles) {
-          const outExtension = getOutExtension(bundle, {
+          await writePackageJson({
+            cwd,
+            packageJson: freshPkg,
+            bundles: bundles.map((type) => ({
+              type,
+              dir: relativeOutDirs[type],
+            })),
+            outputDir: buildDir,
+            addTypes: fileConfig.buildTypes ?? true,
             isFlat,
             packageType,
-            isType: false,
+            exportExtensions: fileConfig.exportExtensions,
           });
-          const relativeOutDir = isFlat ? "." : bundle === "esm" ? "esm" : ".";
-          const outputDir = path.join(buildDir, relativeOutDir);
-
-          const outRelativePath = relativePath.replace(
-            new RegExp(`\\${ext}$`),
-            outExtension,
-          );
-          const outFilePath = path.join(outputDir, outRelativePath);
-          await fs.rm(outFilePath, { force: true }).catch(() => {});
-
-          const typeOutExt = getOutExtension(bundle, {
-            isFlat,
-            packageType,
-            isType: true,
-          });
-          const typeOutFilePath = path.join(
-            outputDir,
-            relativePath.replace(new RegExp(`\\${ext}$`), typeOutExt),
-          );
-          await fs.rm(typeOutFilePath, { force: true }).catch(() => {});
+        } catch (e: any) {
+          console.error(`❌ Failed to update exports: ${e.message}`);
         }
-        debouncedUpdateExports();
-      })
-      .on("unlinkDir", async (dirPath) => {
-        // New handler for folder deletion!
-        const relativePath = path.relative(srcDir, dirPath);
-        console.log(`🗑️  Removed directory ${relativePath}`);
+      };
 
-        for (const bundle of bundles) {
-          const relativeOutDir = isFlat ? "." : bundle === "esm" ? "esm" : ".";
-          const outputDir = path.join(buildDir, relativeOutDir);
-          const outDirPath = path.join(outputDir, relativePath);
+      let exportTimeout: NodeJS.Timeout;
+      const debouncedUpdateExports = () => {
+        clearTimeout(exportTimeout);
+        exportTimeout = setTimeout(() => updateExports(), 150);
+      };
 
-          // Recursively force delete the corresponding output folder
-          await fs
-            .rm(outDirPath, { recursive: true, force: true })
-            .catch(() => {});
-        }
-        debouncedUpdateExports();
+      // 4. Watcher Setup
+      watcher = chokidar.watch(srcDir, {
+        ignored: /(^|[\/\\])\../,
+        persistent: true,
+        ignoreInitial: true,
       });
+
+      watcher
+        .on("change", async (filePath) => await buildFile(filePath))
+        .on("add", async (filePath) => {
+          await buildFile(filePath);
+          debouncedUpdateExports();
+        })
+        .on("unlink", async (filePath) => {
+          const relativePath = path.relative(srcDir, filePath);
+          const ext = path.extname(filePath);
+          for (const bundle of bundles) {
+            const outExtension = getOutExtension(bundle, {
+              isFlat,
+              packageType,
+              isType: false,
+            });
+            const relativeOutDir = isFlat
+              ? "."
+              : bundle === "esm"
+                ? "esm"
+                : ".";
+            const outputDir = path.join(buildDir, relativeOutDir);
+            const outRelativePath = relativePath.replace(
+              new RegExp(`\\${ext}$`),
+              outExtension,
+            );
+            await fs
+              .rm(path.join(outputDir, outRelativePath), { force: true })
+              .catch(() => {});
+          }
+          debouncedUpdateExports();
+        })
+        .on("unlinkDir", async (dirPath) => {
+          const relativePath = path.relative(srcDir, dirPath);
+          for (const bundle of bundles) {
+            const relativeOutDir = isFlat
+              ? "."
+              : bundle === "esm"
+                ? "esm"
+                : ".";
+            await fs
+              .rm(path.join(buildDir, relativeOutDir, relativePath), {
+                recursive: true,
+                force: true,
+              })
+              .catch(() => {});
+          }
+          debouncedUpdateExports();
+        });
+    };
+
+    const configFiles = [
+      "sse.config.ts",
+      "sse.config.js",
+      "sse.config.mjs",
+      "sse.config.cjs",
+      "sse.config.mts",
+      "sse.config.cts",
+      "sse.config.json",
+      "package.json",
+    ];
+
+    configWatcher = chokidar.watch(
+      configFiles.map((f) => path.join(cwd, f)),
+      {
+        persistent: true,
+        ignoreInitial: true,
+      },
+    );
+
+    configWatcher.on("change", () => startWatcher(true));
+    await startWatcher();
   });

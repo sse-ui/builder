@@ -23,6 +23,7 @@ async function getDirSize(dirPath: string): Promise<number> {
 export const infoCommand = new Command("info")
   .description("Displays size and file statistics of the built package")
   .action(async () => {
+    const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
     const cwd = process.cwd();
     const pkgJsonPath = path.join(cwd, "package.json");
 
@@ -30,18 +31,19 @@ export const infoCommand = new Command("info")
       const packageJsonContent = await fs.readFile(pkgJsonPath, {
         encoding: "utf8",
       });
-      const packageJson: PackageJson = JSON.parse(packageJsonContent);
 
+      const packageJson: PackageJson = JSON.parse(packageJsonContent);
       const publishDirBase = packageJson.publishConfig?.directory;
       if (!publishDirBase) {
         throw new Error(`No publish directory specified in package.json.`);
       }
 
       const publishDir = path.join(cwd, publishDirBase);
-
       const sizeBytes = await getDirSize(publishDir);
       const sizeKB = (sizeBytes / 1024).toFixed(2);
       const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
+
+      if (isVerbose) console.log(`Gathering info from ${publishDir}...`);
 
       console.log(`\n📊 Package Info: ${packageJson.name}`);
       console.log(`================================`);

@@ -3,12 +3,15 @@ import * as path from "node:path";
 import { Command } from "commander";
 import { $ } from "execa";
 import { PackageJson } from "./packageJson";
+import { getPackageManager } from "../utils/package-manager";
 
 export const linkCommand = new Command("link")
   .description(
     "Symlinks the built package directory so it can be tested in other local projects",
   )
   .action(async () => {
+    const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
+    const pm = getPackageManager();
     const cwd = process.cwd();
     const pkgJsonPath = path.join(cwd, "package.json");
 
@@ -24,18 +27,19 @@ export const linkCommand = new Command("link")
       }
 
       const publishDir = path.join(cwd, publishDirBase);
-      console.log(`🔗 Linking package from: ./${publishDirBase}...`);
+      if (isVerbose)
+        console.log(`🔗 Linking package from: ./${publishDirBase}...`);
 
       await $({
-        stdio: "inherit",
+        stdio: isVerbose ? "inherit" : "pipe",
         cwd: publishDir,
-      })`npm link`;
+      })`${pm} link`;
 
       console.log(`\n✅ Successfully linked!`);
       console.log(
         `To use this in another project, go to that project and run:`,
       );
-      console.log(`👉 npm link ${packageJson.name}`);
+      console.log(`👉 ${pm} link ${packageJson.name}`);
     } catch (error) {
       console.error("❌ Error executing link command:");
       if (error instanceof Error) console.error(error.message);

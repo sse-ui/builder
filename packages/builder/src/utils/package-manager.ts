@@ -8,3 +8,14 @@ export function getPackageManager(): "npm" | "yarn" | "pnpm" {
   if (userAgent.includes("yarn")) return "yarn";
   return "npm";
 }
+
+/**
+ * Gets the executor command for the current package manager.
+ * Returns an array so `execa` string interpolation correctly expands arguments.
+ */
+export function getPmExec(): string[] {
+  const pm = getPackageManager();
+  if (pm === "pnpm") return ["pnpm", "exec"];
+  if (pm === "yarn") return ["yarn"]; // yarn natively runs local bins
+  return ["npx"];
+}

@@ -7,6 +7,7 @@ import { sep as posixSep } from "node:path/posix";
 import * as semver from "semver";
 import { Command } from "commander";
 import { build as esbuild } from "esbuild";
+import chalk from "chalk";
 
 import {
   addLicense,
@@ -20,47 +21,29 @@ import { PackageJson } from "./packageJson";
 import { loadConfig } from "../utils/loadConfig";
 import { getPackageManager } from "../utils/package-manager";
 
-export interface BuildOptions {
-  /** The bundles to build. */
-  bundle: BundleType[];
-  /** The large files to build. */
-  hasLargeFiles: boolean;
-  /** Whether to skip generating a package.json file in the /esm folder. */
-  skipBundlePackageJson: boolean;
-  /** Whether to enable verbose logging. */
-  verbose: boolean;
-  /** Whether to build types for the package. */
-  buildTypes: boolean;
-  /** Whether to build types for the package. */
-  skipTsc: boolean;
-  /** Whether to skip checking for Babel runtime dependencies in the package. */
-  skipBabelRuntimeCheck: boolean;
-  /** Whether to skip generating the package.json file in the bundle output. */
-  skipPackageJson: boolean;
-  /** Whether to skip checking for main field in package.json. */
-  skipMainCheck: boolean;
-  /** Globs to be ignored by Babel. */
-  ignore: string[];
-  /** Files/Directories to be copied. Can be a glob pattern. */
-  copy: string[];
-  /** Whether to use the React compiler. */
-  enableReactCompiler: boolean;
-  /** Whether to build types using typescript native (tsgo). */
-  tsgo: boolean;
-  /** Builds the package in a flat structure without subdirectories for each module type. */
-  flat: boolean;
-  /** Bundle the package into single files for each format using esbuild (tsup style). */
-  bundleSingleFile: boolean;
-  /**
-   * Available extensions for generating exports wildcards.
-   * @default [".js", ".mjs", ".cjs"]
-   */
-  exportExtensions: string[];
+export interface BuildCliOptions {
+  bundle?: BundleType[];
+  entry?: string;
+  hasLargeFiles?: boolean;
+  skipBundlePackageJson?: boolean;
+  verbose?: boolean;
+  buildTypes?: boolean;
+  skipTsc?: boolean;
+  skipBabelRuntimeCheck?: boolean;
+  skipPackageJson?: boolean;
+  skipMainCheck?: boolean;
+  ignore?: string[];
+  copy?: string[];
+  enableReactCompiler?: boolean;
+  tsgo?: boolean;
+  flat?: boolean;
+  exportExtensions?: string[];
 }
 
 export const buildCommand = new Command("build")
-  .description("Builds the package for publishing.")
+  .description(chalk.cyan("Builds the package for publishing."))
   .option("--bundle <bundles...>", "Bundles to output", ["esm", "cjs"])
+  .option("--entry <entry>", "Entry point for esbuild (e.g., src/index.ts)")
   .option(
     "--hasLargeFiles",
     "Set to `true` if you know you are transpiling large files.",
@@ -71,7 +54,6 @@ export const buildCommand = new Command("build")
     "Set to `true` if you don't want to generate a package.json file in the bundle output.",
     false,
   )
-  // commander interprets `--no-buildTypes` as setting `buildTypes` to false, defaulting to true otherwise.
   .option("--buildTypes", "Do not build types for the package.")
   .option(
     "--skipTsc",
@@ -102,7 +84,7 @@ export const buildCommand = new Command("build")
   .option("--enableReactCompiler", "Whether to use the React compiler.", false)
   .option(
     "--tsgo",
-    'Uses tsgo cli instead of tsc for type generation. Can also be set via env var "SSE_USE_TSGO"',
+    "Uses tsgo cli instead of tsc for type generation.",
     process.env.SSE_USE_TSGO === "1" || process.env.SSE_USE_TSGO === "true",
   )
   .option(
@@ -111,62 +93,43 @@ export const buildCommand = new Command("build")
     process.env.SSE_BUILD_FLAT === "1",
   )
   .option(
-    "--bundleSingleFile",
-    "Bundle all modules into single files using esbuild (tsup style)",
-    false,
-  )
-  .option(
     "--exportExtensions <exts...>",
     "Available extensions for generating exports wildcards.",
     [".js", ".mjs", ".cjs"],
   )
-  .option("--verbose", "Enable verbose logging.", false)
-  .action(async (cliOptions: BuildOptions) => {
+  .action(async (cliOptions: BuildCliOptions) => {
     const fileConfig = await loadConfig();
 
-    const options: BuildOptions = {
-      bundle: cliOptions.bundle || fileConfig.bundle || ["esm", "cjs"],
-      hasLargeFiles:
-        cliOptions.hasLargeFiles ?? fileConfig.hasLargeFiles ?? false,
-      skipBundlePackageJson:
-        cliOptions.skipBundlePackageJson ??
-        fileConfig.skipBundlePackageJson ??
-        false,
-      buildTypes: cliOptions.buildTypes ?? fileConfig.buildTypes ?? true,
-      skipTsc: cliOptions.skipTsc ?? fileConfig.skipTsc ?? false,
-      ignore: [...(fileConfig.ignore || []), ...(cliOptions.ignore || [])],
-      copy: [...(fileConfig.copy || []), ...(cliOptions.copy || [])],
-      enableReactCompiler:
-        cliOptions.enableReactCompiler ??
-        fileConfig.enableReactCompiler ??
-        false,
-      tsgo: cliOptions.tsgo ?? fileConfig.tsgo ?? false,
-      flat: cliOptions.flat ?? fileConfig.flat ?? false,
-      verbose: cliOptions.verbose ?? fileConfig.verbose ?? false,
-      skipBabelRuntimeCheck: false,
-      skipPackageJson: false,
-      skipMainCheck: false,
-      bundleSingleFile:
-        cliOptions.bundleSingleFile ?? fileConfig.bundleSingleFile ?? false,
-      exportExtensions: cliOptions.exportExtensions ??
-        fileConfig.exportExtensions ?? [".js", ".mjs", ".cjs"],
-    };
+    // 1. Resolve verbose explicitly
+    const isVerbose =
+      cliOptions.verbose ||
+      fileConfig.verbose ||
+      process.env.SSE_BUILD_VERBOSE === "true";
+    if (isVerbose) process.env.SSE_BUILD_VERBOSE = "true";
 
-    const {
-      bundle: bundles,
-      hasLargeFiles,
-      skipBundlePackageJson,
-      verbose = false,
-      ignore: extraIgnores,
-      buildTypes,
-      skipTsc,
-      skipBabelRuntimeCheck = false,
-      skipPackageJson = false,
-      enableReactCompiler = false,
-      tsgo: useTsgo = false,
-      bundleSingleFile,
-      exportExtensions,
-    } = options;
+    // 2. Infer Builder (esbuild if esbuild config/entry is present, babel otherwise)
+    const isEsbuild = !!fileConfig.esbuild || !!cliOptions.entry;
+    const builder = isEsbuild ? "esbuild" : "babel";
+
+    const bundles: BundleType[] = cliOptions.bundle ||
+      fileConfig.bundle || ["esm", "cjs"];
+    const isFlat = cliOptions.flat ?? fileConfig.flat ?? false;
+    const buildTypes = cliOptions.buildTypes ?? fileConfig.buildTypes ?? true;
+    const skipTsc = cliOptions.skipTsc ?? fileConfig.skipTsc ?? false;
+    const skipBundlePackageJson =
+      cliOptions.skipBundlePackageJson ??
+      fileConfig.skipBundlePackageJson ??
+      false;
+    const skipBabelRuntimeCheck = cliOptions.skipBabelRuntimeCheck ?? false;
+    const skipPackageJson = cliOptions.skipPackageJson ?? false;
+    const enableReactCompiler =
+      cliOptions.enableReactCompiler ??
+      fileConfig.babel?.enableReactCompiler ??
+      false;
+    const useTsgo = cliOptions.tsgo ?? fileConfig.tsgo ?? false;
+    const exportExtensions = cliOptions.exportExtensions ??
+      fileConfig.exportExtensions ?? [".js", ".mjs", ".cjs"];
+    const copyGlobs = [...(fileConfig.copy || []), ...(cliOptions.copy || [])];
 
     const cwd = process.cwd();
     const pkgJsonPath = path.join(cwd, "package.json");
@@ -175,7 +138,7 @@ export const buildCommand = new Command("build")
     );
 
     validatePkgJson(packageJson, {
-      skipMainCheck: options.skipMainCheck,
+      skipMainCheck: cliOptions.skipMainCheck,
       enableReactCompiler,
     });
 
@@ -183,9 +146,9 @@ export const buildCommand = new Command("build")
     const buildDir = path.join(cwd, buildDirBase);
     const packageType = packageJson.type === "module" ? "module" : "commonjs";
 
-    console.log(`Selected output directory: "${buildDirBase}"`);
-    if (options.flat) {
-      console.log("Building package in flat structure.");
+    if (isVerbose) {
+      console.log(`Selected output directory: "${buildDirBase}"`);
+      if (isFlat) console.log("Building package in flat structure.");
     }
 
     await fs.rm(buildDir, { recursive: true, force: true });
@@ -201,20 +164,22 @@ export const buildCommand = new Command("build")
           const pnpmWorkspaceConfig = JSON.parse(configStdout);
           babelRuntimeVersion = pnpmWorkspaceConfig.catalog["@babel/runtime"];
         } catch (error) {
-          console.warn(
-            `\n⚠️ Failed to resolve 'catalog:' using pnpm. Falling back to default.`,
-          );
+          if (isVerbose)
+            console.warn(
+              `\n⚠️ Failed to resolve 'catalog:' using pnpm. Falling back to default.`,
+            );
           babelRuntimeVersion = "^7.25.0";
         }
       } else {
-        console.warn(
-          `\n⚠️ 'catalog:' dependency found but package manager is ${pm}. Falling back to default babel runtime version.`,
-        );
+        if (isVerbose)
+          console.warn(
+            `\n⚠️ 'catalog:' dependency found but package manager is ${pm}. Falling back to default babel runtime version.`,
+          );
         babelRuntimeVersion = "^7.25.0";
       }
     }
 
-    if (!babelRuntimeVersion && !skipBabelRuntimeCheck) {
+    if (builder === "babel" && !babelRuntimeVersion && !skipBabelRuntimeCheck) {
       throw new Error(
         "package.json needs to have a dependency on `@babel/runtime` when building with `@babel/plugin-transform-runtime`.",
       );
@@ -227,64 +192,69 @@ export const buildCommand = new Command("build")
       return;
     }
 
-    // Assuming utils are also converted to TS, otherwise change to .mjs where needed
-    const { build: babelBuild, cjsCopy } = await import("../utils/babel");
-
-    const relativeOutDirs: Record<BundleType, string> = !options.flat
-      ? {
-          cjs: ".",
-          esm: "esm",
-        }
-      : {
-          cjs: ".",
-          esm: ".",
-        };
+    const relativeOutDirs: Record<BundleType, string> = !isFlat
+      ? { cjs: ".", esm: "esm" }
+      : { cjs: ".", esm: "." };
 
     const sourceDir = path.join(cwd, "src");
     const reactVersion =
       semver.minVersion(packageJson.peerDependencies?.react || "")?.version ??
       "latest";
 
-    if (enableReactCompiler) {
+    if (enableReactCompiler && isVerbose) {
       const mode = process.env.SSE_REACT_COMPILER_MODE ?? "opt-in";
       console.log(
         `[feature] Building with React compiler enabled. The compiler mode is "${mode}" right now.${mode === "opt-in" ? ' Use explicit "use memo" directives in your components to enable the React compiler for them.' : ""}`,
       );
     }
 
-    if (bundleSingleFile) {
-      if (verbose)
+    // ==========================================
+    // ESBUILD COMPILATION
+    // ==========================================
+    if (builder === "esbuild") {
+      if (isVerbose)
         console.log("📦 Bundling package into single files via esbuild...");
+
+      const esbuildConfig = fileConfig.esbuild || { entry: "src/index.ts" };
+      let rawEntryPoints = cliOptions.entry || esbuildConfig.entry;
+
+      if (!rawEntryPoints) {
+        throw new Error(
+          "Esbuild requires an 'entry' point. Please define it in your config (esbuild.entry) or via --entry.",
+        );
+      }
+
+      const entryPoints =
+        typeof rawEntryPoints === "string" ? [rawEntryPoints] : rawEntryPoints;
 
       await Promise.all(
         bundles.map(async (bundle) => {
           const outExtension = getOutExtension(bundle, {
-            isFlat: !!options.flat,
+            isFlat: !!isFlat,
             isType: false,
             packageType,
           });
+
           const relativeOutDir = relativeOutDirs[bundle];
           const outputDir = path.join(buildDir, relativeOutDir);
           await fs.mkdir(outputDir, { recursive: true });
 
           await esbuild({
-            entryPoints: [path.join(sourceDir, "index.ts")],
+            entryPoints: entryPoints as string[] | Record<string, string>,
             bundle: true,
-            outfile: path.join(outputDir, `index${outExtension}`),
+            outdir: outputDir,
             format: bundle === "esm" ? "esm" : "cjs",
-            target: ["es2020", "node14"],
-            minify: false,
+            target: esbuildConfig.target || ["es2020", "node14"],
+            minify: esbuildConfig.minify ?? false,
+            outExtension: { ".js": outExtension }, // Forces the correct extension output
             external: [
               ...Object.keys(packageJson.dependencies || {}),
               ...Object.keys(packageJson.peerDependencies || {}),
+              ...(esbuildConfig.external || []),
             ],
           });
 
-          if (
-            buildDir !== outputDir &&
-            !skipBundlePackageJson &&
-            !options.flat
-          ) {
+          if (buildDir !== outputDir && !skipBundlePackageJson && !isFlat) {
             await fs.writeFile(
               path.join(outputDir, "package.json"),
               JSON.stringify({
@@ -300,17 +270,30 @@ export const buildCommand = new Command("build")
             name: packageJson.name,
             version: packageJson.version,
             outputDir,
-            isFlat: !!options.flat,
+            isFlat: !!isFlat,
             packageType,
           });
         }),
       );
     } else {
-      // -- REGULAR BABEL BUILD --
+      // ==========================================
+      // BABEL COMPILATION
+      // ==========================================
+      if (isVerbose) console.log("📦 Transpiling package via Babel...");
+      const { build: babelBuild, cjsCopy } = await import("../utils/babel");
+
+      const hasLargeFiles =
+        cliOptions.hasLargeFiles ?? fileConfig.babel?.hasLargeFiles ?? false;
+
+      const extraIgnores = [
+        ...(fileConfig.babel?.ignore || []),
+        ...(cliOptions.ignore || []),
+      ];
+
       await Promise.all(
         bundles.map(async (bundle) => {
           const outExtension = getOutExtension(bundle, {
-            isFlat: !!options.flat,
+            isFlat: !!isFlat,
             isType: false,
             packageType,
           });
@@ -328,7 +311,7 @@ export const buildCommand = new Command("build")
               babelRuntimeVersion,
               hasLargeFiles,
               bundle,
-              verbose,
+              verbose: isVerbose,
               optimizeClsx:
                 packageJson.dependencies?.clsx !== undefined ||
                 packageJson.dependencies?.classnames !== undefined,
@@ -338,18 +321,12 @@ export const buildCommand = new Command("build")
               ignores: extraIgnores,
               outExtension,
               reactCompiler: enableReactCompiler
-                ? {
-                    reactVersion: reactVersion || "latest",
-                  }
+                ? { reactVersion: reactVersion || "latest" }
                 : undefined,
             }),
           );
 
-          if (
-            buildDir !== outputDir &&
-            !skipBundlePackageJson &&
-            !options.flat
-          ) {
+          if (buildDir !== outputDir && !skipBundlePackageJson && !isFlat) {
             promises.push(
               fs.writeFile(
                 path.join(outputDir, "package.json"),
@@ -361,7 +338,7 @@ export const buildCommand = new Command("build")
             );
           }
 
-          if (!options.flat) {
+          if (!isFlat) {
             promises.push(cjsCopy({ from: sourceDir, to: outputDir }));
           }
 
@@ -372,41 +349,58 @@ export const buildCommand = new Command("build")
             name: packageJson.name,
             version: packageJson.version,
             outputDir,
-            isFlat: !!options.flat,
+            isFlat: !!isFlat,
             packageType,
           });
         }),
       );
 
-      if (options.flat) {
+      if (isFlat) {
         await cjsCopy({ from: sourceDir, to: buildDir });
       }
     }
 
-    // js build end
-
-    if (buildTypes) {
+    // ==========================================
+    // TYPES & POST-BUILD
+    // ==========================================
+    if (buildTypes === true) {
+      if (isVerbose) console.log("📝 Generating TypeScript declarations...");
       const tsMod = await import("../utils/typescript");
       const bundleMap = bundles.map((type) => ({
         type,
         dir: relativeOutDirs[type],
       }));
 
+      let esbuildEntryPoints: string[] | undefined;
+      if (builder === "esbuild") {
+        const esbuildConfig = fileConfig.esbuild || { entry: "src/index.ts" };
+        const rawEntryPoints = cliOptions.entry || esbuildConfig.entry;
+        esbuildEntryPoints =
+          typeof rawEntryPoints === "string"
+            ? [rawEntryPoints]
+            : (rawEntryPoints as string[]);
+      }
+
       await tsMod.createTypes({
         bundles: bundleMap,
         srcDir: sourceDir,
         cwd,
         skipTsc,
-        isFlat: !!options.flat,
+        isFlat: !!isFlat,
         buildDir,
         useTsgo,
         packageType,
-        verbose: options.verbose,
+        verbose: isVerbose,
+        builder,
+        entryPoints: esbuildEntryPoints,
       });
     }
 
     if (skipPackageJson) {
-      console.log("Skipping package.json generation in the output directory.");
+      if (isVerbose)
+        console.log(
+          "Skipping package.json generation in the output directory.",
+        );
       return;
     }
 
@@ -419,16 +413,16 @@ export const buildCommand = new Command("build")
       })),
       outputDir: buildDir,
       addTypes: buildTypes,
-      isFlat: !!options.flat,
+      isFlat: !!isFlat,
       packageType,
-      exportExtensions: options.exportExtensions,
+      exportExtensions,
     });
 
     await copyHandler({
       cwd,
-      globs: options.copy ?? [],
+      globs: copyGlobs,
       buildDir,
-      verbose: options.verbose,
+      verbose: isVerbose,
     });
   });
 
@@ -468,7 +462,6 @@ async function copyHandler({
     localOrRootFiles.map(async (filesToCopy) => {
       for (const file of filesToCopy) {
         if (
-          // eslint-disable-next-line no-await-in-loop
           await fs.stat(file).then(
             () => true,
             () => false,
@@ -486,6 +479,7 @@ async function copyHandler({
       const [pattern, baseDir] = globPattern.split(":");
       return { pattern, baseDir };
     });
+
     /**
      * Avoids redundant globby calls for the same pattern.
      */
@@ -525,6 +519,7 @@ async function copyHandler({
       console.log("⓿ No files to copy.");
     }
   }
+
   await mapConcurrently(
     defaultFiles,
     async (file) => {
@@ -548,7 +543,7 @@ async function copyHandler({
     },
     20,
   );
-  console.log(`📋 Copied ${defaultFiles.length} files.`);
+  if (verbose) console.log(`📋 Copied ${defaultFiles.length} files.`);
 }
 
 interface RecursiveCopyOptions {

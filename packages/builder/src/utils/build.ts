@@ -280,6 +280,7 @@ export async function createPackageExports({
     ? await expandExportGlobs(rawExports, cwd)
     : rawExports;
 
+  // Ensure the package.json export points to the root of the build directory
   const newExports: PackageJson.ExportConditions = {
     "./package.json": "./package.json",
   };
@@ -299,6 +300,7 @@ export async function createPackageExports({
 
   const jsDirs = new Set<string>();
   const otherFiles = new Set<string>();
+  let exportableFileCount = 0;
 
   for (const file of buildFiles) {
     if (
@@ -314,7 +316,10 @@ export async function createPackageExports({
 
     if (exportExtensions.includes(ext)) {
       jsDirs.add(path.posix.dirname(normalizedFile));
+      exportableFileCount++;
     } else {
+      // Ignore internal package.json files found in bundle subdirectories
+      if (normalizedFile.endsWith("package.json")) continue;
       otherFiles.add(normalizedFile);
     }
   }
@@ -326,6 +331,9 @@ export async function createPackageExports({
     .stat(path.join(scanDir, getIndexFileName(baseBundle.type)))
     .then((s) => s.isFile())
     .catch(() => false);
+
+  // Determine if the package only contains a root index file
+  const hasOnlyRootIndex = exportableFileCount === 1 && rootIndexExists;
 
   if (rootIndexExists && originalExports["."] === undefined) {
     newExports["."] ??= {};
@@ -368,6 +376,12 @@ export async function createPackageExports({
   for (const dir of jsDirs) {
     // 2a. Directory Globs (e.g. `./*`, `./r/*`)
     const globKey = dir === "." ? "./*" : `./${dir}/*`;
+
+    // Only add the root wildcard export if there are other files besides index
+    if (dir === "." && hasOnlyRootIndex) {
+      continue;
+    }
+
     if (originalExports[globKey] === undefined) {
       newExports[globKey] ??= {};
       const globConditions = newExports[
@@ -399,7 +413,7 @@ export async function createPackageExports({
       }
     }
 
-    // 2b. Sub-directory Index Exports (e.g. if `utils/index.js` exists, export `./utils`)
+    // 2b. Sub-directory Index Exports
     if (dir !== ".") {
       const dirIndexExists = await fs
         .stat(path.posix.join(scanDir, dir, getIndexFileName(baseBundle.type)))
@@ -460,6 +474,7 @@ export async function createPackageExports({
     newExports[exportKey] = `./${dirPrefix}${file}`;
   }
 
+  // Handle custom manually declared non-root exports and final cleanups
   const exportKeys = Object.keys(originalExports);
   for (const key of exportKeys) {
     const importPath = originalExports[key];
@@ -499,7 +514,6 @@ export async function createPackageExports({
         const typeExportDir = `./${dirPrefix}index${typeOutExtension}`;
 
         if (indexFileExists && originalExports["."] !== undefined) {
-          // skip `packageJson.module` to support parcel and some older bundlers
           if (type === "cjs") {
             result.main = exportDir;
           }
@@ -529,19 +543,18 @@ export async function createPackageExports({
           result.types = typeExportDir;
         }
 
-        // Handle custom manually declared non-root exports
-        const exportKeys = Object.keys(originalExports);
-        for (const key of exportKeys) {
-          const importPath = originalExports[key];
-          if (!importPath) {
-            newExports[key] = null;
+        const subExportKeys = Object.keys(originalExports);
+        for (const subKey of subExportKeys) {
+          const subImportPath = originalExports[subKey];
+          if (!subImportPath) {
+            newExports[subKey] = null;
             continue;
           }
-          if (key === ".") continue;
+          if (subKey === ".") continue;
 
           await createExportsFor({
-            importPath,
-            key,
+            importPath: subImportPath,
+            key: subKey,
             cwd,
             dir,
             type,
@@ -555,8 +568,10 @@ export async function createPackageExports({
     );
   }
 
+  // Explicitly block access to bundle directories and internal package.json files
   bundles.forEach(({ dir }) => {
     if (dir !== ".") {
+      newExports[`./${dir}/package.json`] = null;
       newExports[`./${dir}`] = null;
       newExports[`./${dir}/*`] = null;
     }
@@ -574,7 +589,6 @@ export async function createPackageExports({
       typeof exportVal === "object" &&
       (exportVal.import || exportVal.require)
     ) {
-      // Use ESM (import) for default if available, otherwise use require
       const defaultExport = exportVal.import || exportVal.require;
 
       if (addTypes) {
@@ -584,7 +598,7 @@ export async function createPackageExports({
           defaultExport &&
           typeof defaultExport === "object" &&
           "default" in defaultExport
-            ? defaultExport.default
+            ? (defaultExport as any).default
             : defaultExport;
       }
     }

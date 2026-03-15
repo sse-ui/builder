@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+
+import chalk from "chalk";
 import { Command } from "commander";
 import { buildCommand } from "./core/build";
 import { publishCommand } from "./core/publish";
@@ -16,8 +18,17 @@ async function main() {
 
   program
     .name("sse-tools")
-    .description("CLI utilities for managing and building SSE packages")
-    .version("1.0.0");
+    .description(
+      chalk.cyan("CLI utilities for managing and building SSE packages"),
+    )
+    .version("1.0.0")
+    .option("-v, --verbose", "Enable verbose logging across all commands");
+
+  program.hook("preAction", (thisCommand) => {
+    if (thisCommand.opts().verbose) {
+      process.env.SSE_BUILD_VERBOSE = "true";
+    }
+  });
 
   program.addCommand(buildCommand);
   program.addCommand(publishCommand);

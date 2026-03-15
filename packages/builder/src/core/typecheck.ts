@@ -7,7 +7,8 @@ export const typecheckCommand = new Command("typecheck")
   )
   .option("--watch", "Run typechecking in watch mode")
   .action(async (options) => {
-    console.log("🔍 Running typecheck...");
+    const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
+    if (isVerbose) console.log("🔍 Running typecheck...");
 
     try {
       const args = ["tsc", "--noEmit"];

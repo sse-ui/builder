@@ -1,15 +1,18 @@
 import { loadConfig as loadC12Config } from "c12";
-import { BuildOptions } from "../config";
+import { BuildConfig } from "../config";
 
-export async function loadConfig(): Promise<Partial<BuildOptions>> {
+export async function loadConfig(): Promise<BuildConfig> {
   try {
-    const { config, configFile } = await loadC12Config<BuildOptions>({
+    const { config, configFile } = await loadC12Config<BuildConfig>({
       name: "sse",
       rcFile: false,
       globalRc: false,
     });
 
-    if (configFile) {
+    if (
+      configFile &&
+      (config?.verbose || process.env.SSE_BUILD_VERBOSE === "true")
+    ) {
       console.log(`📝 Loaded config from ${configFile}`);
     }
 

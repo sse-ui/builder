@@ -5,10 +5,6 @@ import { $ } from "execa";
 import { PackageJson } from "./packageJson";
 import { getPackageManager } from "../utils/package-manager";
 
-/**
- * Auto-detects the package manager currently being used.
- * Looks at the npm_config_user_agent environment variable.
- */
 export const publishCommand = new Command("publish")
   .description(
     "Automatically publishes the built package from the publishConfig.directory",
@@ -27,6 +23,7 @@ export const publishCommand = new Command("publish")
     "Force a specific package manager (npm, yarn, pnpm)",
   )
   .action(async (options) => {
+    const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
     const cwd = process.cwd();
     const pkgJsonPath = path.join(cwd, "package.json");
 
@@ -57,9 +54,11 @@ export const publishCommand = new Command("publish")
       }
 
       const pm = options.pm || getPackageManager();
-      console.log(
-        `🚀 Publishing via ${pm.toUpperCase()} from directory: ${publishDirBase}`,
-      );
+      if (isVerbose) {
+        console.log(
+          `🚀 Publishing via ${pm.toUpperCase()} from directory: ${publishDirBase}`,
+        );
+      }
 
       const args = ["publish"];
       if (options.tag) args.push("--tag", options.tag);

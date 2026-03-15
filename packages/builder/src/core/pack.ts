@@ -3,12 +3,15 @@ import * as path from "node:path";
 import { Command } from "commander";
 import { $ } from "execa";
 import { PackageJson } from "./packageJson";
+import { getPackageManager } from "../utils/package-manager";
 
 export const packCommand = new Command("pack")
   .description(
     "Creates a tarball (.tgz) of the built package to inspect before publishing",
   )
   .action(async () => {
+    const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
+    const pm = getPackageManager();
     const cwd = process.cwd();
     const pkgJsonPath = path.join(cwd, "package.json");
 
@@ -24,13 +27,14 @@ export const packCommand = new Command("pack")
       }
 
       const publishDir = path.join(cwd, publishDirBase);
-      console.log(`📦 Packing package from directory: ${publishDirBase}...`);
+      if (isVerbose)
+        console.log(`📦 Packing package from directory: ${publishDirBase}...`);
 
       // Run npm pack inside the build directory
       await $({
         stdio: "inherit",
         cwd: publishDir,
-      })`npm pack`;
+      })`${pm} pack`;
 
       console.log(
         "✅ Pack successful! You can inspect the generated .tgz file.",

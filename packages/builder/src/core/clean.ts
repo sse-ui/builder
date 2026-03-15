@@ -8,6 +8,7 @@ export const cleanCommand = new Command("clean")
     "Removes the build directory specified in package.json to start fresh",
   )
   .action(async () => {
+    const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
     const cwd = process.cwd();
     const pkgJsonPath = path.join(cwd, "package.json");
 
@@ -19,7 +20,9 @@ export const cleanCommand = new Command("clean")
       const packageJson: PackageJson = JSON.parse(packageJsonContent);
       const buildDirBase = packageJson.publishConfig?.directory || "build";
       const buildDir = path.join(cwd, buildDirBase);
-      console.log(`🧹 Cleaning build directory: ${buildDirBase}...`);
+
+      if (isVerbose)
+        console.log(`🧹 Cleaning build directory: ${buildDirBase}...`);
       await fs.rm(buildDir, { recursive: true, force: true });
       console.log("✨ Cleaned successfully!");
     } catch (error) {
