@@ -4,15 +4,14 @@
   "description": "Builder By SSE",
   "type": "module",
   "scripts": {
-    "build": "tsup",
-    "prepublish": "npm run build"
+    "build": "tsup"
   },
   "main": "./dist/cli.js",
   "files": [
     "dist"
   ],
   "bin": {
-    "sse-tools": "./dist/cli.js"
+    "sse-tools": "dist/cli.js"
   },
   "exports": {
     "./babel-config": {
@@ -58,5 +57,14 @@
     "minimatch": "^10.2.4",
     "mismatch": "^1.2.0",
     "semver": "^7.7.4"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sse-ui/builder.git"
+  },
+  "types": "./dist/cli.d.ts",
+  "bugs": {
+    "url": "https://github.com/sse-ui/builder/issues"
+  },
+  "homepage": "https://github.com/sse-ui/builder#readme"
 }

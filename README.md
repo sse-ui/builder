@@ -1,159 +1,77 @@
-# Turborepo starter
+# @sse-ui/builder (sse-tools)
 
-This Turborepo starter is maintained by the Turborepo core team.
+`sse-tools` is a high-performance CLI utility designed for managing, building, and publishing software packages within the SSE ecosystem. It provides a unified interface for library development, supporting both Babel for individual file transpilation and esbuild for high-speed bundling.
 
-## Using this example
+## ✨ Features
 
-Run the following command:
+- **Hybrid Builder Engine**: Seamlessly switch between Babel for detailed transpilation or esbuild for rapid bundling via simple configuration.
+- **Vite-style Watch Mode**: Features an incremental watcher that rebuilds only the specific files you change, significantly speeding up development loops.
+- **Intelligent Export Management**: Automatically generates and optimizes your package.json exports field based on your build output, supporting both flat and nested structures.
+- **TypeScript-First**: Built-in support for generating and bundling .d.ts declaration files using either standard tsc or the high-performance tsgo compiler.
+- **React Compiler Support**: Integrated support for the React compiler, including automatic environment configuration and peer-dependency validation.
+- **Interactive Versioning**: A CLI-guided versioning system that helps you bump package versions safely using SemVer standards.
 
-```sh
-npx create-turbo@latest
+## 🚀 Installation
+
+Install the package as a development dependency:
+
+```bash
+npm install --save-dev @sse-ui/builder
 ```
 
-## What's inside?
+## 🛠 Usage
 
-This Turborepo includes the following packages/apps:
+Once installed, you can access the utility via the `sse-tools` command.
 
-### Apps and Packages
+### Core Commands
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+| Command         | Description                                                                          |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `build`         | Compiles the package for production using Babel or esbuild.                          |
+| `watch`         | Starts an incremental rebuild watcher for rapid development.                         |
+| `typecheck`     | Validates TypeScript types across the project without emitting files.                |
+| `check-exports` | Verifies that all files declared in package.json actually exist in the build folder. |
+| `version`       | Interactively bumps the package version (patch, minor, major).                       |
+| `publish`       | Publishes the built package directly from your specified build directory.            |
+| `info`          | Displays size and file statistics for your built package.                            |
+| `clean`         | Safely removes the build directory to ensure a fresh start.                          |
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## ⚙️ Configuration
 
-### Utilities
+`sse-tools` uses `c12` for robust configuration loading. You can define your configuration in `sse.config.ts`, `sse.config.js`, or within your `package.json`.
 
-This Turborepo has some additional tools already setup for you:
+```typescript
+import { defineConfig } from "@sse-ui/builder/config";
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+export default defineConfig({
+  bundle: ["esm", "cjs"],
+  buildTypes: true,
+  flat: false,
 
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+  // Use esbuild for bundling single files
+  esbuild: {
+    entry: "src/index.ts",
+    minify: true,
+    target: "es2022",
+  },
+});
 ```
 
-Without global `turbo`, use your package manager:
+### Build Options
 
-```sh
-cd my-turborepo
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
-```
+- `bundle`: Specify output formats, such as `["esm", "cjs"]`.
+- `flat`: When enabled, builds a flat structure instead of using format-specific subdirectories.
+- `copy`: Define an array of glob patterns to copy static assets or documentation into the build folder.
+- `tsgo`: Toggle between `tsc` and `tsgo` for faster type generation.
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+## Docs
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+Go to the Docs [click here](./docs)
 
-```sh
-turbo build --filter=docs
-```
+## Example
 
-Without global `turbo`:
+Go to the Example [Click Here](./example)
 
-```sh
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+## 📄 License
 
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+This project is licensed under the `MIT` License.
