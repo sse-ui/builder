@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Command } from "commander";
+import chalk from "chalk";
 import { PackageJson } from "./packageJson";
 
 // Helper to recursively calculate directory size
@@ -43,24 +44,29 @@ export const infoCommand = new Command("info")
       const sizeKB = (sizeBytes / 1024).toFixed(2);
       const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
 
-      if (isVerbose) console.log(`Gathering info from ${publishDir}...`);
+      if (isVerbose)
+        console.log(chalk.gray(`Gathering info from ${publishDir}...`));
 
-      console.log(`\n📊 Package Info: ${packageJson.name}`);
-      console.log(`================================`);
-      console.log(`Version:       ${packageJson.version}`);
-      console.log(`Build Folder:  ./${publishDirBase}`);
+      console.log(
+        chalk.cyan(`\n📊 Package Info: `) + chalk.bold(packageJson.name),
+      );
+      console.log(chalk.gray(`================================`));
+      console.log(`Version:       ${chalk.white(packageJson.version)}`);
+      console.log(`Build Folder:  ${chalk.white(`./${publishDirBase}`)}`);
 
       if (sizeBytes > 1024 * 1024) {
         console.log(
-          `Total Size:    ${sizeMB} MB ⚠️ (Consider keeping packages under 1MB)`,
+          `Total Size:    ${chalk.yellow(`${sizeMB} MB`)} ${chalk.red("⚠️ (Consider keeping packages under 1MB)")}`,
         );
       } else {
-        console.log(`Total Size:    ${sizeKB} KB ✅`);
+        console.log(`Total Size:    ${chalk.green(`${sizeKB} KB ✅`)}`);
       }
-      console.log(`================================\n`);
+      console.log(chalk.gray(`================================\n`));
     } catch (error) {
       console.error(
-        "❌ Error fetching package info. Did you build the project first?",
+        chalk.red(
+          "❌ Error fetching package info. Did you build the project first?",
+        ),
       );
       process.exit(1);
     }

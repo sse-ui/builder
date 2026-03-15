@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { $ } from "execa";
+import chalk from "chalk";
 
 export const typecheckCommand = new Command("typecheck")
   .description(
@@ -8,7 +9,7 @@ export const typecheckCommand = new Command("typecheck")
   .option("--watch", "Run typechecking in watch mode")
   .action(async (options) => {
     const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
-    if (isVerbose) console.log("🔍 Running typecheck...");
+    if (isVerbose) console.log(chalk.blue("🔍 Running typecheck..."));
 
     try {
       const args = ["tsc", "--noEmit"];
@@ -18,11 +19,13 @@ export const typecheckCommand = new Command("typecheck")
 
       await $({ stdio: "inherit" })`${args.join(" ")}`;
       if (!options.watch) {
-        console.log("✅ Typecheck passed! No errors found.");
+        console.log(chalk.green("✅ Typecheck passed! No errors found."));
       }
     } catch (error) {
       console.error(
-        "❌ Typecheck failed. Please fix the TypeScript errors above.",
+        chalk.red(
+          "❌ Typecheck failed. Please fix the TypeScript errors above.",
+        ),
       );
       process.exit(1);
     }

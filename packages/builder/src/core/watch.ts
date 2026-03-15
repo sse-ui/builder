@@ -5,6 +5,7 @@ import chokidar, { FSWatcher } from "chokidar";
 import { $ } from "execa";
 import { build as esbuild } from "esbuild";
 import { findWorkspacesRoot } from "find-workspaces";
+import chalk from "chalk";
 import { loadConfig } from "../utils/loadConfig";
 import {
   getOutExtension,
@@ -34,7 +35,9 @@ export const watchCommand = new Command("watch")
 
       const isVerbose = process.env.SSE_BUILD_VERBOSE === "true";
       if (isReload) {
-        console.log(`\n🔄 Configuration change detected. Reloading...`);
+        console.log(
+          chalk.cyan(`\n🔄 Configuration change detected. Reloading...`),
+        );
       }
 
       const packageJsonContent = await fs.readFile(pkgJsonPath, "utf8");
@@ -60,7 +63,9 @@ export const watchCommand = new Command("watch")
       let babelRuntimeVersion = packageJson.dependencies?.["@babel/runtime"];
       const reactVersion = packageJson.peerDependencies?.react || "latest";
 
-      console.log(`👀 Watching for changes (Builder: ${builder})...`);
+      console.log(
+        chalk.blue(`👀 Watching for changes (Builder: ${builder})...`),
+      );
 
       // 1. Initial Build
       try {
@@ -69,17 +74,22 @@ export const watchCommand = new Command("watch")
           preferLocal: true,
         })`${pmExec} sse-tools build`;
       } catch (err) {
-        console.error(`❌ Initial build failed. Waiting for changes...\n`);
+        console.error(
+          chalk.red(`❌ Initial build failed. Waiting for changes...\n`),
+        );
       }
 
       // 2. Incremental Build Logic
       const buildFile = async (filePath: string) => {
         const relativePath = path.relative(srcDir, filePath);
+        const minify = fileConfig.minify ?? false;
 
         if (builder === "esbuild") {
           if (isVerbose)
             console.log(
-              `🚀 [esbuild] Incremental rebuild triggered by ${relativePath}...`,
+              chalk.gray(
+                `🚀 [esbuild] Incremental rebuild triggered by ${relativePath}...`,
+              ),
             );
 
           const esbuildConfig = fileConfig.esbuild!;
@@ -108,7 +118,7 @@ export const watchCommand = new Command("watch")
                   outdir: outputDir,
                   format: bundle === "esm" ? "esm" : "cjs",
                   target: esbuildConfig.target || ["es2020", "node14"],
-                  minify: esbuildConfig.minify ?? false,
+                  minify: minify,
                   outExtension: { ".js": outExtension },
                   external: [
                     ...Object.keys(packageJson.dependencies || {}),
@@ -118,9 +128,13 @@ export const watchCommand = new Command("watch")
                 });
               }),
             );
-            if (isVerbose) console.log(`✅ [esbuild] Rebuild complete.`);
+            if (isVerbose)
+              console.log(chalk.green(`✅ [esbuild] Rebuild complete.`));
           } catch (err: any) {
-            console.error(`❌ [esbuild] Rebuild failed:`, err.message);
+            console.error(
+              chalk.red(`❌ [esbuild] Rebuild failed:`),
+              err.message,
+            );
           }
         } else {
           // BABEL LOGIC (Individual file transpilation)
@@ -164,6 +178,7 @@ export const watchCommand = new Command("watch")
                 NODE_ENV: "production",
                 BABEL_ENV: bundle === "esm" ? "stable" : "node",
                 SSE_OUT_FILE_EXTENSION: outExtension,
+                SSE_MINIFY: minify ? "true" : undefined,
                 SSE_BABEL_RUNTIME_VERSION: babelRuntimeVersion,
                 ...getVersionEnvVariables(packageJson.version),
               };
@@ -175,7 +190,8 @@ export const watchCommand = new Command("watch")
               })`babel --config-file ${babelConfigFile} --extensions .js,.jsx,.ts,.tsx ${filePath} --out-file ${outFilePath}`;
             }),
           );
-          if (isVerbose) console.log(`✅ [babel] Updated ${relativePath}`);
+          if (isVerbose)
+            console.log(chalk.green(`✅ [babel] Updated ${relativePath}`));
         }
       };
 
@@ -203,7 +219,7 @@ export const watchCommand = new Command("watch")
             exportExtensions: fileConfig.exportExtensions,
           });
         } catch (e: any) {
-          console.error(`❌ Failed to update exports: ${e.message}`);
+          console.error(chalk.red(`❌ Failed to update exports: ${e.message}`));
         }
       };
 

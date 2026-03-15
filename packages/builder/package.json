@@ -1,6 +1,6 @@
 {
   "name": "@sse-ui/builder",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Builder By SSE",
   "type": "module",
   "scripts": {

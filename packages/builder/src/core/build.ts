@@ -34,6 +34,7 @@ export interface BuildCliOptions {
   skipMainCheck?: boolean;
   ignore?: string[];
   copy?: string[];
+  minify?: boolean;
   enableReactCompiler?: boolean;
   tsgo?: boolean;
   flat?: boolean;
@@ -97,6 +98,7 @@ export const buildCommand = new Command("build")
     "Available extensions for generating exports wildcards.",
     [".js", ".mjs", ".cjs"],
   )
+  .option("--minify", "Minify the generated output.")
   .action(async (cliOptions: BuildCliOptions) => {
     const fileConfig = await loadConfig();
 
@@ -113,22 +115,27 @@ export const buildCommand = new Command("build")
 
     const bundles: BundleType[] = cliOptions.bundle ||
       fileConfig.bundle || ["esm", "cjs"];
+
     const isFlat = cliOptions.flat ?? fileConfig.flat ?? false;
+    const minify = cliOptions.minify ?? fileConfig.minify ?? false;
     const buildTypes = cliOptions.buildTypes ?? fileConfig.buildTypes ?? true;
     const skipTsc = cliOptions.skipTsc ?? fileConfig.skipTsc ?? false;
     const skipBundlePackageJson =
       cliOptions.skipBundlePackageJson ??
       fileConfig.skipBundlePackageJson ??
       false;
+
     const skipBabelRuntimeCheck = cliOptions.skipBabelRuntimeCheck ?? false;
     const skipPackageJson = cliOptions.skipPackageJson ?? false;
     const enableReactCompiler =
       cliOptions.enableReactCompiler ??
       fileConfig.babel?.enableReactCompiler ??
       false;
+
     const useTsgo = cliOptions.tsgo ?? fileConfig.tsgo ?? false;
     const exportExtensions = cliOptions.exportExtensions ??
       fileConfig.exportExtensions ?? [".js", ".mjs", ".cjs"];
+
     const copyGlobs = [...(fileConfig.copy || []), ...(cliOptions.copy || [])];
 
     const cwd = process.cwd();
@@ -147,19 +154,18 @@ export const buildCommand = new Command("build")
     const packageType = packageJson.type === "module" ? "module" : "commonjs";
 
     if (isVerbose) {
-      console.log(`Selected output directory: "${buildDirBase}"`);
-      if (isFlat) console.log("Building package in flat structure.");
+      console.log(chalk.blue(`Selected output directory: "${buildDirBase}"`));
+      if (isFlat)
+        console.log(chalk.blue("Building package in flat structure."));
     }
 
     await fs.rm(buildDir, { recursive: true, force: true });
-
     const pm = getPackageManager();
+
     let babelRuntimeVersion = packageJson.dependencies?.["@babel/runtime"];
     if (babelRuntimeVersion === "catalog:") {
       if (pm === "pnpm") {
         try {
-          // resolve the version from the given package
-          // outputs the pnpm-workspace.yaml config as json
           const { stdout: configStdout } = await $`pnpm config list --json`;
           const pnpmWorkspaceConfig = JSON.parse(configStdout);
           babelRuntimeVersion = pnpmWorkspaceConfig.catalog["@babel/runtime"];
@@ -187,7 +193,9 @@ export const buildCommand = new Command("build")
 
     if (!bundles || bundles.length === 0) {
       console.error(
-        "No bundles specified. Use --bundle to specify which bundles to build.",
+        chalk.red(
+          "No bundles specified. Use --bundle to specify which bundles to build.",
+        ),
       );
       return;
     }
@@ -213,14 +221,18 @@ export const buildCommand = new Command("build")
     // ==========================================
     if (builder === "esbuild") {
       if (isVerbose)
-        console.log("📦 Bundling package into single files via esbuild...");
+        console.log(
+          chalk.green("📦 Bundling package into single files via esbuild..."),
+        );
 
       const esbuildConfig = fileConfig.esbuild || { entry: "src/index.ts" };
       let rawEntryPoints = cliOptions.entry || esbuildConfig.entry;
 
       if (!rawEntryPoints) {
         throw new Error(
-          "Esbuild requires an 'entry' point. Please define it in your config (esbuild.entry) or via --entry.",
+          chalk.red(
+            "Esbuild requires an 'entry' point. Please define it in your config (esbuild.entry) or via --entry.",
+          ),
         );
       }
 
@@ -245,7 +257,7 @@ export const buildCommand = new Command("build")
             outdir: outputDir,
             format: bundle === "esm" ? "esm" : "cjs",
             target: esbuildConfig.target || ["es2020", "node14"],
-            minify: esbuildConfig.minify ?? false,
+            minify: minify,
             outExtension: { ".js": outExtension }, // Forces the correct extension output
             external: [
               ...Object.keys(packageJson.dependencies || {}),
@@ -279,7 +291,9 @@ export const buildCommand = new Command("build")
       // ==========================================
       // BABEL COMPILATION
       // ==========================================
-      if (isVerbose) console.log("📦 Transpiling package via Babel...");
+      if (isVerbose)
+        console.log(chalk.green("📦 Transpiling package via Babel..."));
+
       const { build: babelBuild, cjsCopy } = await import("../utils/babel");
 
       const hasLargeFiles =
@@ -312,6 +326,7 @@ export const buildCommand = new Command("build")
               hasLargeFiles,
               bundle,
               verbose: isVerbose,
+              minify,
               optimizeClsx:
                 packageJson.dependencies?.clsx !== undefined ||
                 packageJson.dependencies?.classnames !== undefined,
@@ -364,7 +379,9 @@ export const buildCommand = new Command("build")
     // TYPES & POST-BUILD
     // ==========================================
     if (buildTypes === true) {
-      if (isVerbose) console.log("📝 Generating TypeScript declarations...");
+      if (isVerbose)
+        console.log(chalk.cyan("📝 Generating TypeScript declarations..."));
+
       const tsMod = await import("../utils/typescript");
       const bundleMap = bundles.map((type) => ({
         type,
@@ -424,6 +441,8 @@ export const buildCommand = new Command("build")
       buildDir,
       verbose: isVerbose,
     });
+
+    console.log(chalk.green.bold("✔ Build completed successfully"));
   });
 
 interface CopyHandlerOptions {
@@ -543,6 +562,7 @@ async function copyHandler({
     },
     20,
   );
+
   if (verbose) console.log(`📋 Copied ${defaultFiles.length} files.`);
 }
 
@@ -563,7 +583,7 @@ async function recursiveCopy({
   try {
     await fs.cp(source, target, { recursive: true });
     if (verbose) {
-      console.log(`Copied ${source} to ${target}`);
+      console.log(chalk.gray(`📄 Copied ${source} → ${target}`));
     }
     return true;
   } catch (err: unknown) {
@@ -575,9 +595,11 @@ async function recursiveCopy({
     ) {
       throw err;
     }
+
     if (verbose) {
-      console.warn(`Source does not exist: ${source}`);
+      console.warn(chalk.yellow(`⚠ Source does not exist: ${source}`));
     }
+
     throw err;
   }
 }

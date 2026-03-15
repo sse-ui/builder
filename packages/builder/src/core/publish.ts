@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Command } from "commander";
 import { $ } from "execa";
+import chalk from "chalk";
 import { PackageJson } from "./packageJson";
 import { getPackageManager } from "../utils/package-manager";
 
@@ -56,7 +57,9 @@ export const publishCommand = new Command("publish")
       const pm = options.pm || getPackageManager();
       if (isVerbose) {
         console.log(
-          `🚀 Publishing via ${pm.toUpperCase()} from directory: ${publishDirBase}`,
+          chalk.blue(
+            `🚀 Publishing via ${pm.toUpperCase()} from directory: ${publishDirBase}`,
+          ),
         );
       }
 
@@ -78,11 +81,11 @@ export const publishCommand = new Command("publish")
         cwd: publishDir,
       })`${pm} ${args}`;
 
-      console.log("✅ Successfully published!");
+      console.log(chalk.green("✅ Successfully published!"));
     } catch (error) {
-      console.error("❌ Error executing publish command:");
+      console.error(chalk.red("❌ Error executing publish command:"));
       if (error instanceof Error) {
-        console.error(error.message);
+        console.error(chalk.red(error.message));
       }
       process.exit(1);
     }

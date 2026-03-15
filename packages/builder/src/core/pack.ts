@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Command } from "commander";
 import { $ } from "execa";
+import chalk from "chalk";
 import { PackageJson } from "./packageJson";
 import { getPackageManager } from "../utils/package-manager";
 
@@ -28,20 +29,23 @@ export const packCommand = new Command("pack")
 
       const publishDir = path.join(cwd, publishDirBase);
       if (isVerbose)
-        console.log(`📦 Packing package from directory: ${publishDirBase}...`);
+        console.log(
+          chalk.blue(`📦 Packing package from directory: ${publishDirBase}...`),
+        );
 
-      // Run npm pack inside the build directory
       await $({
         stdio: "inherit",
         cwd: publishDir,
       })`${pm} pack`;
 
       console.log(
-        "✅ Pack successful! You can inspect the generated .tgz file.",
+        chalk.green(
+          "✅ Pack successful! You can inspect the generated .tgz file.",
+        ),
       );
     } catch (error) {
-      console.error("❌ Error executing pack command:");
-      if (error instanceof Error) console.error(error.message);
+      console.error(chalk.red("❌ Error executing pack command:"));
+      if (error instanceof Error) console.error(chalk.red(error.message));
       process.exit(1);
     }
   });

@@ -1,6 +1,8 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Command } from "commander";
+import chalk from "chalk";
+import { globby } from "globby";
 import { PackageJson } from "./packageJson";
 
 async function fileExists(filePath: string) {
@@ -57,37 +59,69 @@ export const checkExportsCommand = new Command("check-exports")
       const buildPkg: PackageJson = JSON.parse(buildPkgContent);
 
       if (!buildPkg.exports) {
-        if (isVerbose) console.log("⚠️ No 'exports' field found to check.");
+        if (isVerbose)
+          console.log(chalk.yellow("⚠️ No 'exports' field found to check."));
         return;
       }
 
-      console.log(`🕵️ Checking exports mapping in ./${publishDirBase}...`);
+      console.log(
+        chalk.blue(`🕵️ Checking exports mapping in ./${publishDirBase}...`),
+      );
+
       const allPaths = extractPaths(buildPkg.exports);
+      // Remove duplicates just in case multiple conditions point to the same path
+      const uniquePaths = Array.from(new Set(allPaths));
       let hasErrors = false;
 
-      for (const relativePath of allPaths) {
-        // Paths in exports start with "./", e.g., "./esm/index.js"
-        const absolutePath = path.join(cwd, publishDirBase, relativePath);
-        const exists = await fileExists(absolutePath);
+      const publishDirFullPath = path.join(cwd, publishDirBase);
 
-        if (exists) {
-          if (isVerbose) console.log(`  ✅ Found: ${relativePath}`);
+      for (const relativePath of uniquePaths) {
+        // If the path is a glob pattern (contains '*'), check if it matches anything
+        if (relativePath.includes("*")) {
+          const matchedFiles = await globby(relativePath, {
+            cwd: publishDirFullPath,
+          });
+
+          if (matchedFiles.length > 0) {
+            if (isVerbose)
+              console.log(
+                chalk.green(`  ✅ Found matches for pattern: ${relativePath}`),
+              );
+          } else {
+            console.error(
+              chalk.red(`  ❌ No files match pattern: ${relativePath}`),
+            );
+            hasErrors = true;
+          }
         } else {
-          console.error(`  ❌ Missing: ${relativePath}`);
-          hasErrors = true;
+          // Exact file check
+          const absolutePath = path.join(publishDirFullPath, relativePath);
+          const exists = await fileExists(absolutePath);
+
+          if (exists) {
+            if (isVerbose)
+              console.log(chalk.green(`  ✅ Found: ${relativePath}`));
+          } else {
+            console.error(chalk.red(`  ❌ Missing: ${relativePath}`));
+            hasErrors = true;
+          }
         }
       }
 
       if (hasErrors) {
         console.error(
-          "\n❌ Export check failed! Some files declared in package.json are missing.",
+          chalk.red(
+            "\n❌ Export check failed! Some files declared in package.json are missing.",
+          ),
         );
         process.exit(1);
       } else {
-        console.log("\n✨ All exported files are present and accounted for!");
+        console.log(
+          chalk.green("\n✨ All exported files are present and accounted for!"),
+        );
       }
     } catch (error) {
-      if (error instanceof Error) console.error(error.message);
+      if (error instanceof Error) console.error(chalk.red(error.message));
       process.exit(1);
     }
   });

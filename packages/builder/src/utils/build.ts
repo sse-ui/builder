@@ -4,6 +4,7 @@ import { globby } from "globby";
 import { minimatch } from "minimatch";
 import * as semver from "semver";
 import { PackageJson } from "../core/packageJson";
+import chalk from "chalk";
 
 export type BundleType = "esm" | "cjs";
 export type PackageType = "module" | "commonjs";
@@ -853,7 +854,9 @@ export async function addLicense({
 ${content}`,
     { encoding: "utf8" },
   );
-  if (process.env.SSE_BUILD_VERBOSE) console.log(`License added to ${file}`);
+
+  if (process.env.SSE_BUILD_VERBOSE)
+    console.log(chalk.gray(`License added to ${file}`));
 }
 
 interface WritePackageJsonOptions {

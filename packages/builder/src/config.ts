@@ -14,8 +14,6 @@ export interface EsbuildOptions {
    * Example: "src/index.ts" or ["src/index.ts"] or { main: "src/index.ts" }
    */
   entry: string | string[] | Record<string, string>;
-  /** Minify the generated bundle. */
-  minify?: boolean;
   /** Target environment for the generated JavaScript. */
   target?: string | string[];
   /** External dependencies to exclude from the bundle. */
@@ -41,6 +39,8 @@ export interface BaseBuildConfig {
   copy?: string[];
   /** Skip generating a package.json file in the bundle output */
   skipBundlePackageJson?: boolean;
+  /** Minify the generated bundle. */
+  minify?: boolean;
 }
 
 /**

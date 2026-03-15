@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Command } from "commander";
 import { PackageJson } from "./packageJson";
+import chalk from "chalk";
 
 export const cleanCommand = new Command("clean")
   .description(
@@ -22,13 +23,16 @@ export const cleanCommand = new Command("clean")
       const buildDir = path.join(cwd, buildDirBase);
 
       if (isVerbose)
-        console.log(`🧹 Cleaning build directory: ${buildDirBase}...`);
+        console.log(
+          chalk.blue(`🧹 Cleaning build directory: ${buildDirBase}...`),
+        );
+
       await fs.rm(buildDir, { recursive: true, force: true });
-      console.log("✨ Cleaned successfully!");
+      console.log(chalk.green("✨ Cleaned successfully!"));
     } catch (error) {
-      console.error("❌ Error executing clean command:");
+      console.error(chalk.red("❌ Error executing clean command:"));
       if (error instanceof Error) {
-        console.error(error.message);
+        console.error(chalk.red(error.message));
       }
       process.exit(1);
     }

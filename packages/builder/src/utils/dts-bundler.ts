@@ -5,6 +5,7 @@ import * as util from "node:util";
 import assert from "node:assert";
 import { globbySync } from "globby";
 import * as prettier from "prettier";
+import chalk from "chalk";
 
 const dtsExp = /\.d\.ts$/;
 const bomOptExp = /^\uFEFF?/;
@@ -455,15 +456,15 @@ export async function bundle(options: Options): Promise<BundleResult> {
   }
 
   function traceObject(obj: unknown) {
-    if (verbose) console.log(obj);
+    if (verbose) console.dir(obj, { colors: true });
   }
 
   function trace(...args: unknown[]) {
-    if (verbose) console.log(util.format.apply(null, args as any));
+    if (verbose) console.log(chalk.gray(util.format.apply(null, args as any)));
   }
 
   function warning(...args: unknown[]) {
-    console.log(util.format.apply(null, args as any));
+    console.log(chalk.yellow(util.format.apply(null, args as any)));
   }
 
   function getModName(file: string) {

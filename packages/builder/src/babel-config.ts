@@ -150,6 +150,10 @@ export function getBaseConfig({
       [presetTypescript],
     ],
     plugins,
+    minified: process.env.SSE_MINIFY === "true",
+    shouldPrintComment: (val) =>
+      process.env.SSE_MINIFY !== "true" ||
+      /[@#]__PURE__|license|copyright/i.test(val),
   };
 }
 

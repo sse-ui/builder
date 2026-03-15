@@ -15,6 +15,7 @@ import {
   mapConcurrently,
   PackageType,
 } from "./build";
+import chalk from "chalk";
 
 const $$ = $({ stdio: "inherit" });
 
@@ -62,7 +63,7 @@ export async function emitDeclarations(
   }
 
   if (tsgoPath) {
-    console.log("Using tsgo for declaration emit");
+    console.log(chalk.cyan("Using tsgo for declaration emit"));
     await $$`${tsgoPath}
       -p ${tsconfig}
       --rootDir ${rootDir}
@@ -97,7 +98,9 @@ export async function copyDeclarations(
 
   if (options.verbose) {
     console.log(
-      `Copying declarations from ${fullSourceDirectory} to ${fullDestinationDirectory}`,
+      chalk.gray(
+        `Copying declarations from ${fullSourceDirectory} to ${fullDestinationDirectory}`,
+      ),
     );
   }
 
@@ -153,7 +156,9 @@ export async function moveAndTransformDeclarations({
   });
   if (dtsFiles.length === 0) {
     console.log(
-      `No d.ts files found in ${toCopyDir}. Skipping transformation.`,
+      chalk.yellow(
+        `No d.ts files found in ${toCopyDir}. Skipping transformation.`,
+      ),
     );
     return;
   }
@@ -215,7 +220,10 @@ export async function moveAndTransformDeclarations({
             await fs.mkdir(path.dirname(outFilePath), { recursive: true });
             await fs.writeFile(outFilePath, result.code);
           } else {
-            console.error("failed to transform", dtsFile);
+            console.error(
+              chalk.red("failed to transform"),
+              chalk.gray(dtsFile),
+            );
           }
         }),
       );
@@ -300,10 +308,7 @@ export async function createTypes({
   // ESBUILD MODE: Bundle single `.d.ts` files
   // ==========================================
   if (builder === "esbuild" && entryPoints && !skipTsc) {
-    if (verbose)
-      console.log(
-        "📦 Bundling TypeScript declarations",
-      );
+    if (verbose) console.log(chalk.blue("📦 Bundling TypeScript declarations"));
 
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "sse-dts-bundle-"));
 
@@ -349,11 +354,15 @@ export async function createTypes({
 
                 if (verbose)
                   console.log(
-                    `✅ Generated bundled types for ${bundleItem.type}: ${outFilePath}`,
+                    chalk.green(
+                      `✅ Generated bundled types for ${bundleItem.type}: ${outFilePath}`,
+                    ),
                   );
               } catch (err: any) {
-                console.error(`❌ Failed to bundle types for ${entry}`);
-                console.error(err.message);
+                console.error(
+                  chalk.red(`❌ Failed to bundle types for ${entry}`),
+                );
+                console.error(chalk.red(err.message));
               }
             }),
           );
@@ -388,7 +397,9 @@ export async function createTypes({
         );
       }
       if (verbose)
-        console.log(`Building types for ${tsconfigPath} in ${tmpDir}`);
+        console.log(
+          chalk.cyan(`Building types for ${tsconfigPath} in ${tmpDir}`),
+        );
       await emitDeclarations(tsconfigPath, tmpDir, { useTsgo });
     }
 

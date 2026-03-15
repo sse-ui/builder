@@ -3,6 +3,7 @@ import { $ } from "execa";
 import { globby } from "globby";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import chalk from "chalk";
 import { BASE_IGNORES, type BundleType } from "./build";
 
 const TO_TRANSFORM_EXTENSIONS = [".js", ".ts", ".tsx"] as const;
@@ -44,7 +45,7 @@ export async function cjsCopy({ from, to }: CjsCopyOptions): Promise<void> {
     .catch(() => false);
 
   if (!exists) {
-    console.warn(`path ${to} does not exists`);
+    console.warn(chalk.yellow(`⚠️ path ${to} does not exist`));
     return;
   }
 
@@ -79,6 +80,7 @@ export interface BuildOptions {
   removePropTypes?: boolean;
   ignores?: string[];
   reactCompiler?: ReactCompilerOptions;
+  minify?: boolean;
 }
 
 export async function build({
@@ -95,10 +97,13 @@ export async function build({
   verbose = false,
   ignores = [],
   reactCompiler,
+  minify = false,
 }: BuildOptions): Promise<void> {
   if (verbose) {
     console.log(
-      `Transpiling files to "${path.relative(path.dirname(sourceDir), outDir)}" for "${bundle}" bundle.`,
+      chalk.blue(
+        `Transpiling files to "${path.relative(path.dirname(sourceDir), outDir)}" for "${bundle}" bundle.`,
+      ),
     );
   }
 
@@ -129,9 +134,11 @@ export async function build({
     ...getVersionEnvVariables(pkgVersion),
     SSE_REACT_COMPILER: reactVersion ? "1" : "0",
     SSE_REACT_COMPILER_REACT_VERSION: reactVersion,
+    SSE_MINIFY: minify ? "true" : undefined,
   };
 
   const resolvedOutExtension = outExtension ?? ".js";
+  const minifiedArgs = minify ? ["--minified"] : [];
 
   const res = await $({
     stdio: "inherit",
@@ -141,7 +148,7 @@ export async function build({
       ...process.env,
       ...env,
     },
-  })`babel --config-file ${configFile} --extensions ${TO_TRANSFORM_EXTENSIONS.join(
+  })`babel --config-file ${configFile} ${minifiedArgs} --extensions ${TO_TRANSFORM_EXTENSIONS.join(
     ",",
   )} ${sourceDir} --out-dir ${outDir} --ignore ${BASE_IGNORES.concat(
     ignores,
@@ -156,8 +163,7 @@ export async function build({
   }
 
   if (verbose) {
-    console.log(
-      `Command: '${res.escapedCommand}' succeeded with \n${res.stdout}`,
-    );
+    const output = res.stdout ? `\n${res.stdout}` : "";
+    console.log(chalk.green(`✅ Babel compilation succeeded!${output}`));
   }
 }

@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { $ } from "execa";
 import enquirer from "enquirer";
 import * as semver from "semver";
+import chalk from "chalk";
 import { getPackageManager } from "../utils/package-manager";
 
 export const versionCommand = new Command("version")
@@ -41,7 +42,9 @@ export const versionCommand = new Command("version")
       } catch (err) {
         if (isVerbose)
           console.warn(
-            "⚠️ Could not read current version from package.json. Defaulting to 0.0.0",
+            chalk.yellow(
+              "⚠️ Could not read current version from package.json. Defaulting to 0.0.0",
+            ),
           );
       }
 
@@ -86,14 +89,18 @@ export const versionCommand = new Command("version")
         !semver.valid(selectedType)
       ) {
         console.error(
-          `❌ Invalid version type: ${selectedType}. Use patch, minor, major, or a valid semver.`,
+          chalk.red(
+            `❌ Invalid version type: ${selectedType}. Use patch, minor, major, or a valid semver.`,
+          ),
         );
         process.exit(1);
       }
     }
 
     if (isVerbose)
-      console.log(`📈 Bumping version (${selectedType}) via ${pm}...`);
+      console.log(
+        chalk.cyan(`📈 Bumping version (${selectedType}) via ${pm}...`),
+      );
 
     try {
       const args = ["version", selectedType];
@@ -102,9 +109,9 @@ export const versionCommand = new Command("version")
       }
 
       await $({ stdio: isVerbose ? "inherit" : "pipe" })`${pm} ${args}`;
-      console.log("✅ Version bumped successfully!");
+      console.log(chalk.green("✅ Version bumped successfully!"));
     } catch (error) {
-      console.error("❌ Failed to bump version.");
+      console.error(chalk.red("❌ Failed to bump version."));
       process.exit(1);
     }
   });

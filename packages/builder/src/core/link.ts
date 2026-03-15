@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Command } from "commander";
 import { $ } from "execa";
+import chalk from "chalk";
 import { PackageJson } from "./packageJson";
 import { getPackageManager } from "../utils/package-manager";
 
@@ -28,21 +29,23 @@ export const linkCommand = new Command("link")
 
       const publishDir = path.join(cwd, publishDirBase);
       if (isVerbose)
-        console.log(`🔗 Linking package from: ./${publishDirBase}...`);
+        console.log(
+          chalk.blue(`🔗 Linking package from: ./${publishDirBase}...`),
+        );
 
       await $({
         stdio: isVerbose ? "inherit" : "pipe",
         cwd: publishDir,
       })`${pm} link`;
 
-      console.log(`\n✅ Successfully linked!`);
+      console.log(chalk.green(`\n✅ Successfully linked!`));
       console.log(
         `To use this in another project, go to that project and run:`,
       );
-      console.log(`👉 ${pm} link ${packageJson.name}`);
+      console.log(chalk.cyan(`👉 ${pm} link ${packageJson.name}`));
     } catch (error) {
-      console.error("❌ Error executing link command:");
-      if (error instanceof Error) console.error(error.message);
+      console.error(chalk.red("❌ Error executing link command:"));
+      if (error instanceof Error) console.error(chalk.red(error.message));
       process.exit(1);
     }
   });
