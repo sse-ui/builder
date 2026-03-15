@@ -5,10 +5,10 @@ export default defineConfig({
   bundle: ["esm", "cjs"],
   verbose: true,
   buildTypes: true,
+  minify: true,
 
   esbuild: {
     entry: "src/index.ts",
-    minify: false,
     target: ["es2020", "node14"],
     external: [],
   },
