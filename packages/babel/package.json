@@ -1,6 +1,6 @@
 {
   "name": "@ssets/babel",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Babel for SSE SSE UI Builder",
   "type": "module",
   "exports": {
@@ -11,6 +11,26 @@
     "./preset/*": {
       "import": "./dist/preset/*.js",
       "types": "./dist/preset/*.d.ts"
+    },
+    "./helper/*": {
+      "import": "./dist/helper/*.js",
+      "types": "./dist/helper/*.d.ts"
+    },
+    "./helper/validator-identifier": {
+      "import": "./dist/helper/validator-identifier/index.js",
+      "types": "./dist/helper/validator-identifier/index.d.ts"
+    },
+    "./vendors/*": {
+      "import": "./dist/vendors/*.js",
+      "types": "./dist/vendors/*.d.ts"
+    },
+    "./code-frame": {
+      "import": "./dist/code-frame/index.js",
+      "types": "./dist/code-frame/index.d.ts"
+    },
+    "./code-frame/*": {
+      "import": "./dist/code-frame/*.js",
+      "types": "./dist/code-frame/*.d.ts"
     }
   },
   "files": [
