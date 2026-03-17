@@ -1,0 +1,32 @@
+{
+  "name": "@ssets/dts",
+  "version": "1.0.0",
+  "description": "Simple and focuses on the action of merging multiple declaration files into one.",
+  "type": "module",
+  "main": "dist/bundle-generator.cjs",
+  "module": "dist/bundle-generator.js",
+  "types": "dist/bundle-generator.d.ts",
+  "scripts": {
+    "build": "tsup"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sse-ui/builder.git"
+  },
+  "author": "SSE World",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sse-ui/builder/issues"
+  },
+  "homepage": "https://github.com/sse-ui/builder#readme",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
