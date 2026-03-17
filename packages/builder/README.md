@@ -27,6 +27,7 @@ Once installed, you can access the utility via the `sse-tools` command.
 
 | Command         | Description                                                                          |
 | --------------- | ------------------------------------------------------------------------------------ |
+| `init`          | To initializes the package with the required configuration files                     |
 | `build`         | Compiles the package for production using Babel or esbuild.                          |
 | `watch`         | Starts an incremental rebuild watcher for rapid development.                         |
 | `typecheck`     | Validates TypeScript types across the project without emitting files.                |
@@ -35,6 +36,7 @@ Once installed, you can access the utility via the `sse-tools` command.
 | `publish`       | Publishes the built package directly from your specified build directory.            |
 | `info`          | Displays size and file statistics for your built package.                            |
 | `clean`         | Safely removes the build directory to ensure a fresh start.                          |
+| `remove`        | Safely removes all configuration files and dependencies added by the init command    |
 
 ## ⚙️ Configuration
 

@@ -12,6 +12,8 @@ import { infoCommand } from "./core/info";
 import { linkCommand } from "./core/link";
 import { checkExportsCommand } from "./core/check-exports";
 import { watchCommand } from "./core/watch";
+import { initCommand } from "./core/init";
+import { removeCommand } from "./core/remove";
 
 async function main() {
   const program = new Command();
@@ -30,6 +32,7 @@ async function main() {
     }
   });
 
+  program.addCommand(initCommand);
   program.addCommand(buildCommand);
   program.addCommand(publishCommand);
   program.addCommand(cleanCommand);
@@ -40,6 +43,7 @@ async function main() {
   program.addCommand(linkCommand);
   program.addCommand(checkExportsCommand);
   program.addCommand(watchCommand);
+  program.addCommand(removeCommand);
 
   try {
     await program.parseAsync(process.argv);
