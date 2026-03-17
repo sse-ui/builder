@@ -1,0 +1,94 @@
+name: 🐛 Bug Report
+description: Create a report to help us improve sse-tools
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! 
+        Please provide as much information as possible to help us reproduce the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+      placeholder: When I run `sse-tools build`, it crashes with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: Steps to reproduce the behavior. If you have a minimal reproduction repo, please link it here.
+      placeholder: |
+        1. Run `sse-tools init` and choose ESBuild
+        2. Add the following to `src/index.ts`...
+        3. Run `npm run build`
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: package-manager
+    attributes:
+      label: Package Manager
+      description: Which package manager are you using?
+      options:
+        - npm
+        - yarn
+        - pnpm
+    validations:
+      required: true
+
+  - type: dropdown
+    id: builder
+    attributes:
+      label: Builder Used
+      description: Which bundler is configured in your setup?
+      options:
+        - babel
+        - esbuild
+    validations:
+      required: true
+
+  - type: input
+    id: sse-tools-version
+    attributes:
+      label: sse-tools Version
+      description: Which version of sse-tools are you using? (e.g., 1.0.0)
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version
+      description: Which version of Node.js are you running?
+      placeholder: "v20.11.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: config-context
+    attributes:
+      label: sse.config.ts / package.json Context
+      description: Please share your `sse.config.ts` or the relevant `package.json` configuration if applicable.
+      render: typescript
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Logs
+      description: Paste any relevant error logs here (run your command with `--verbose` if possible).
+      render: shell
