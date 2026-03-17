@@ -51,7 +51,6 @@ export default defineConfig({
   // Use esbuild for bundling single files
   esbuild: {
     entry: "src/index.ts",
-    minify: true,
     target: "es2022",
   },
 });
