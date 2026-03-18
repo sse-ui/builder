@@ -101,7 +101,7 @@ export const initCommand = new Command("init")
       if (!tsconfigBuildExists) {
         await fs.writeFile(
           tsconfigBuildPath,
-          `{\n  "extends": "./tsconfig.json"\n, "compilerOptions": {
+          `{\n  "extends": "./tsconfig.json",\n  "compilerOptions": {
     "types": [],
   }}\n`,
           "utf8",

@@ -1,6 +1,6 @@
 {
   "name": "@ssets/dts",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Simple and focuses on the action of merging multiple declaration files into one.",
   "type": "module",
   "main": "dist/bundle-generator.cjs",

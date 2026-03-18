@@ -814,6 +814,7 @@ interface AddLicenseOptions {
   name?: string;
   version?: string;
   license?: string;
+  author?: string;
   isFlat: boolean;
   packageType?: "module" | "commonjs";
   bundle: BundleType;
@@ -825,6 +826,7 @@ export async function addLicense({
   version,
   license,
   bundle,
+  author,
   outputDir,
   isFlat,
   packageType,
@@ -841,16 +843,18 @@ export async function addLicense({
     return;
   }
 
+  const authorLine = author ? `\n * @author ${author}` : "";
   const content = await fs.readFile(file, { encoding: "utf8" });
   await fs.writeFile(
     file,
     `/**
  * ${name} v${version}
- *
+ * ${authorLine}
  * @license ${license}
  * This source code is licensed under the ${license} license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
 ${content}`,
     { encoding: "utf8" },
   );
