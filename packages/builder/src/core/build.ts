@@ -281,6 +281,10 @@ export const buildCommand = new Command("build")
             license: packageJson.license,
             name: packageJson.name,
             version: packageJson.version,
+            author:
+              typeof packageJson.author === "string"
+                ? packageJson.author
+                : packageJson.author?.name,
             outputDir,
             isFlat: !!isFlat,
             packageType,
